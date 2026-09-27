@@ -1,4 +1,6 @@
 import os
+import subprocess
+import threading
 
 import pytest
 
@@ -38,13 +40,40 @@ def test_detects_a_nitro_and_its_features(manager):
 
 
 def test_unknown_laptop_with_acer_wmi_does_not_reload_the_driver(fake_system, no_subprocesses):
-    for name in os.listdir(os.path.join(paths.ACER_WMI_DEVICE_PATH, "nitro_sense")):
-        os.unlink(os.path.join(paths.ACER_WMI_DEVICE_PATH, "nitro_sense", name))
-    os.rmdir(os.path.join(paths.ACER_WMI_DEVICE_PATH, "nitro_sense"))
+    remove_nitro_sense()
 
     manager = DAMXManager()
     assert manager.laptop_type == LaptopType.UNKNOWN
     assert manager.available_features == {"thermal_profile"}
+
+
+def remove_nitro_sense():
+    sense = os.path.join(paths.ACER_WMI_DEVICE_PATH, "nitro_sense")
+    for name in os.listdir(sense):
+        os.unlink(os.path.join(sense, name))
+    os.rmdir(sense)
+
+
+def test_unknown_laptop_with_linuwu_sense_reloads_the_driver_once(fake_system, monkeypatch):
+    remove_nitro_sense()
+    os.unlink(os.path.join(paths.ACER_WMI_DEVICE_PATH, "driver", "module"))
+    monkeypatch.setattr(DAMXManager, "DRIVER_SETTLE_TIMEOUT", 0.2)
+    calls = []
+    monkeypatch.setattr(subprocess, "run", lambda args, **kwargs: calls.append(args))
+
+    manager = DAMXManager()
+    assert calls == [["rmmod", "linuwu_sense"], ["modprobe", "linuwu_sense"]]
+    assert manager.laptop_type == LaptopType.UNKNOWN
+
+
+def test_waits_for_the_driver_to_register_its_settings(fake_system, monkeypatch):
+    sense = os.path.join(paths.ACER_WMI_DEVICE_PATH, "nitro_sense")
+    os.rename(sense, sense + ".later")
+    os.unlink(os.path.join(paths.ACER_WMI_DEVICE_PATH, "driver", "module"))
+    threading.Timer(0.3, os.rename, (sense + ".later", sense)).start()
+
+    manager = DAMXManager()
+    assert manager.laptop_type == LaptopType.NITRO
 
 
 @pytest.mark.parametrize("name", [
