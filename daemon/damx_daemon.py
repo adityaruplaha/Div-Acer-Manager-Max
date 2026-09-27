@@ -21,9 +21,9 @@ import configparser
 import traceback
 from pathlib import Path
 from enum import Enum
-from PowerSourceDetection import PowerSourceDetector 
+from power_source import PowerSourceDetector
 from typing import Dict, List, Tuple, Set, Optional
-# from KeyboardMonitor import KeyboardMonitor
+# from keyboard_monitor import KeyboardMonitor
 
 # Constants
 VERSION = "0.5.2"

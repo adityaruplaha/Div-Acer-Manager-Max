@@ -69,11 +69,11 @@ jobs:
       id: versions
       run: |
         # Detect GUI version
-        GUI_VERSION=$(grep -oP 'private const string ProjectVersion\s*=\s*"\K[\d.]+' Div-Acer-Manager-Max/DivAcerManagerMax/MainWindow.axaml.cs || echo "unknown")
+        GUI_VERSION=$(grep -oP 'private const string ProjectVersion\s*=\s*"\K[\d.]+' Div-Acer-Manager-Max/gui/DivAcerManagerMax/MainWindow.axaml.cs || echo "unknown")
         echo "gui_version=$GUI_VERSION" >> $GITHUB_OUTPUT
         
         # Detect daemon version  
-        DAEMON_VERSION=$(grep -oP 'VERSION\s*=\s*"\K[\d.]+' Div-Acer-Manager-Max/DAMM-Daemon/DAMX-Daemon.py || echo "unknown")
+        DAEMON_VERSION=$(grep -oP 'VERSION\s*=\s*"\K[\d.]+' Div-Acer-Manager-Max/daemon/damx_daemon.py || echo "unknown")
         echo "daemon_version=$DAEMON_VERSION" >> $GITHUB_OUTPUT
         
         # Detect drivers version based on selected drivers
@@ -92,7 +92,7 @@ jobs:
     
     - name: Build Python Daemon
       run: |
-        cd Div-Acer-Manager-Max/DAMM-Daemon
+        cd Div-Acer-Manager-Max/daemon
         
         # Install dependencies if requirements.txt exists
         if [ -f requirements.txt ]; then
@@ -100,14 +100,14 @@ jobs:
         fi
         
         # Build with PyInstaller
-        pyinstaller --onefile --clean DAMX-Daemon.py
+        pyinstaller --onefile --clean damx_daemon.py
         
         echo "✓ Daemon built successfully"
         ls -la dist/
     
     - name: Build .NET GUI
       run: |
-        cd Div-Acer-Manager-Max/DivAcerManagerMax
+        cd Div-Acer-Manager-Max/gui/DivAcerManagerMax
         
         dotnet publish \
           -c Release \
@@ -135,29 +135,29 @@ jobs:
     
     - name: Copy Daemon Executable
       run: |
-        cp Div-Acer-Manager-Max/DAMM-Daemon/dist/DAMX-Daemon "${{ env.package_dir }}/DAMX-Daemon/"
+        cp Div-Acer-Manager-Max/daemon/dist/DAMX-Daemon "${{ env.package_dir }}/DAMX-Daemon/"
         chmod +x "${{ env.package_dir }}/DAMX-Daemon/DAMX-Daemon"
         echo "✓ Daemon executable copied"
     
     - name: Copy GUI Executable and Icons
       run: |
         # Copy the main executable
-        find Div-Acer-Manager-Max/DivAcerManagerMax/bin/Release/net9.0/linux-x64/publish/ -type f -executable -name "*DivAcerManagerMax*" -exec cp {} "${{ env.package_dir }}/DAMX-GUI/DivAcerManagerMax" \;
+        find Div-Acer-Manager-Max/gui/DivAcerManagerMax/bin/Release/net9.0/linux-x64/publish/ -type f -executable -name "*DivAcerManagerMax*" -exec cp {} "${{ env.package_dir }}/DAMX-GUI/DivAcerManagerMax" \;
         
         # If no specific executable found, copy the first executable
         if [ ! -f "${{ env.package_dir }}/DAMX-GUI/DivAcerManagerMax" ]; then
-          find Div-Acer-Manager-Max/DivAcerManagerMax/bin/Release/net9.0/linux-x64/publish/ -type f -executable | head -1 | xargs -I {} cp {} "${{ env.package_dir }}/DAMX-GUI/DivAcerManagerMax"
+          find Div-Acer-Manager-Max/gui/DivAcerManagerMax/bin/Release/net9.0/linux-x64/publish/ -type f -executable | head -1 | xargs -I {} cp {} "${{ env.package_dir }}/DAMX-GUI/DivAcerManagerMax"
         fi
         
         chmod +x "${{ env.package_dir }}/DAMX-GUI/DivAcerManagerMax"
         
         # Copy icon files if they exist
-        if [ -f "Div-Acer-Manager-Max/DivAcerManagerMax/icon.png" ]; then
-          cp "Div-Acer-Manager-Max/DivAcerManagerMax/icon.png" "${{ env.package_dir }}/DAMX-GUI/"
+        if [ -f "Div-Acer-Manager-Max/gui/DivAcerManagerMax/icon.png" ]; then
+          cp "Div-Acer-Manager-Max/gui/DivAcerManagerMax/icon.png" "${{ env.package_dir }}/DAMX-GUI/"
         fi
         
-        if [ -f "Div-Acer-Manager-Max/DivAcerManagerMax/iconTransparent.png" ]; then
-          cp "Div-Acer-Manager-Max/DivAcerManagerMax/iconTransparent.png" "${{ env.package_dir }}/DAMX-GUI/"
+        if [ -f "Div-Acer-Manager-Max/gui/DivAcerManagerMax/iconTransparent.png" ]; then
+          cp "Div-Acer-Manager-Max/gui/DivAcerManagerMax/iconTransparent.png" "${{ env.package_dir }}/DAMX-GUI/"
         fi
         
         echo "✓ GUI executable and icons copied"
@@ -169,12 +169,12 @@ jobs:
     
     - name: Copy and Update Setup Script
       run: |
-        if [ -f "Div-Acer-Manager-Max/scripts/local-setup.sh" ]; then
-          cp "Div-Acer-Manager-Max/scripts/local-setup.sh" "${{ env.package_dir }}/setup.sh"
-        elif [ -f "scripts/local-setup.sh" ]; then
-          cp "scripts/local-setup.sh" "${{ env.package_dir }}/setup.sh"
+        if [ -f "Div-Acer-Manager-Max/installer/setup.sh" ]; then
+          cp "Div-Acer-Manager-Max/installer/setup.sh" "${{ env.package_dir }}/setup.sh"
+        elif [ -f "installer/setup.sh" ]; then
+          cp "installer/setup.sh" "${{ env.package_dir }}/setup.sh"
         else
-          echo "Error: local-setup.sh not found"
+          echo "Error: setup.sh not found"
           exit 1
         fi
         
@@ -188,8 +188,8 @@ jobs:
         echo "✓ Setup script updated and made executable"
         
         # Copy nitro key detection script alongside setup.sh
-        if [ -f "Div-Acer-Manager-Max/scripts/nitro-key-detection.sh" ]; then
-          cp "Div-Acer-Manager-Max/scripts/nitro-key-detection.sh" "${{ env.package_dir }}/"
+        if [ -f "Div-Acer-Manager-Max/installer/nitro-key-detection.sh" ]; then
+          cp "Div-Acer-Manager-Max/installer/nitro-key-detection.sh" "${{ env.package_dir }}/"
           echo "✓ nitro-key-detection.sh copied"
         else
           echo "Warning: nitro-key-detection.sh not found, skipping"
