@@ -12,6 +12,7 @@ import codecs
 import ctypes
 import fcntl
 import glob
+import io
 import logging
 import logging.handlers
 import select
@@ -103,6 +104,24 @@ file_handler = logging.handlers.RotatingFileHandler(
     LOG_PATH, maxBytes=1024*1024*5, backupCount=5)
 file_handler.setFormatter(formatter)
 log.addHandler(file_handler)
+
+def atomic_write(path: str, content: str, mode: int = 0o644):
+    """Replace path with content, so that readers see the old or new file but never a partial one"""
+    directory = os.path.dirname(path)
+    os.makedirs(directory, exist_ok=True)
+    tmp_path = os.path.join(directory, f".{os.path.basename(path)}.tmp")
+    fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+    try:
+        with os.fdopen(fd, 'w') as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    except BaseException:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+        raise
+
 
 class LaptopType(Enum):
     UNKNOWN = 0
@@ -321,17 +340,9 @@ class DAMXManager:
     def _set_modprobe_parameter(self, param: str) -> bool:
         """Set modprobe parameter in config file"""
         try:
-            # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(MODPROBE_CONFIG_PATH), exist_ok=True)
-            
-            # Write the config file
-            with open(MODPROBE_CONFIG_PATH, 'w') as f:
-                f.write(f"options {self.driver_module} {param}=1\n")
-                f.flush()
-                os.fsync(f.fileno())  # Force write to disk
-            
+            atomic_write(MODPROBE_CONFIG_PATH, f"options {self.driver_module} {param}=1\n")
+
             # Verify the write was successful
-            time.sleep(0.1)  # Small delay to ensure file system sync
             if os.path.exists(MODPROBE_CONFIG_PATH):
                 with open(MODPROBE_CONFIG_PATH, 'r') as f:
                     content = f.read().strip()
@@ -357,7 +368,6 @@ class DAMXManager:
             if os.path.exists(MODPROBE_CONFIG_PATH):
                 os.unlink(MODPROBE_CONFIG_PATH)
                 # Verify removal
-                time.sleep(0.1)
                 if not os.path.exists(MODPROBE_CONFIG_PATH):
                     log.info("Successfully removed modprobe parameter config")
                     self.current_modprobe_param = ""
@@ -1627,12 +1637,10 @@ class DAMXDaemon:
                 'AutoDetectFeatures': 'True'
             }
 
-            # Create config directory if it doesn't exist
-            os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-
             # Write default config
-            with open(CONFIG_PATH, 'w') as f:
-                config.write(f)
+            buffer = io.StringIO()
+            config.write(buffer)
+            atomic_write(CONFIG_PATH, buffer.getvalue())
         else:
             # Load existing config
             config.read(CONFIG_PATH)
