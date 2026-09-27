@@ -3,10 +3,10 @@ Publish/
 publish/
 buildPublish/
 
-# Python, from github/gitignore Python.gitignore. *.spec and *.manifest are
-# left out: daemon/damx_daemon.spec and gui/DivAcerManagerMax/app.manifest
-# are tracked on purpose.
+# Python, from github/gitignore Python.gitignore. *.manifest is left out:
+# gui/DivAcerManagerMax/app.manifest is tracked on purpose.
 __pycache__/
+*.spec
 *.py[codz]
 build/
 dist/

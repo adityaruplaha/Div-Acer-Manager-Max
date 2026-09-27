@@ -1,0 +1,18 @@
+[Unit]
+Description=DAMX Daemon for Acer laptops
+Documentation=https://github.com/PXDiv/Div-Acer-Manager-Max
+# Linuwu-Sense, which the installer builds, loads its driver through modules-load.d
+After=systemd-modules-load.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/damx-daemon
+Restart=on-failure
+RestartSec=5
+# The daemon logs to the journal under this name
+SyslogIdentifier=damx-daemon
+# Creates /etc/damx, where the daemon keeps its config
+ConfigurationDirectory=damx
+
+[Install]
+WantedBy=multi-user.target

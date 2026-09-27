@@ -10,6 +10,11 @@ INSTALL_DIR="/opt/damx"
 BIN_DIR="/usr/local/bin"
 SYSTEMD_DIR="/etc/systemd/system"
 DAEMON_SERVICE_NAME="damx-daemon.service"
+# The daemon is a Python package in its own venv, with its unit where
+# installed software keeps them; /etc/systemd/system is for local overrides
+DAEMON_VENV="/usr/lib/damx"
+DAEMON_BIN="/usr/bin/damx-daemon"
+DAEMON_UNIT_DIR="/usr/lib/systemd/system"
 DESKTOP_FILE_DIR="/usr/share/applications"
 ICON_DIR="/usr/share/icons/hicolor/256x256/apps"
 DBUS_NAME="io.github.PXDiv.DAMX"
@@ -100,6 +105,18 @@ cleanup_legacy_installation() {
   fi
 
   # Check for other potential legacy artifacts
+  # Before 0.6 the daemon was a single binary under ${INSTALL_DIR}, and its
+  # unit, written in /etc, would override the one now installed
+  if [ -d "${INSTALL_DIR}/daemon" ] || [ -f "${SYSTEMD_DIR}/${DAEMON_SERVICE_NAME}" ]; then
+    echo "Removing the daemon installed by an earlier version..."
+    if systemctl is-active --quiet ${DAEMON_SERVICE_NAME} 2>/dev/null; then
+      systemctl stop ${DAEMON_SERVICE_NAME}
+    fi
+    rm -rf "${INSTALL_DIR}/daemon"
+    rm -f "${SYSTEMD_DIR}/${DAEMON_SERVICE_NAME}"
+    cleanup_performed=true
+  fi
+
   local legacy_artifacts=(
     "/usr/local/bin/DAMX-Daemon"
     "/usr/share/applications/DAMX.desktop"
@@ -159,6 +176,9 @@ comprehensive_cleanup() {
   rm -f ${BIN_DIR}/DAMX
   rm -f ${DESKTOP_FILE_DIR}/damx.desktop
   rm -f ${ICON_DIR}/damx.png
+  rm -rf ${DAEMON_VENV}
+  rm -f ${DAEMON_BIN}
+  rm -f ${DAEMON_UNIT_DIR}/${DAEMON_SERVICE_NAME}
   rm -f ${DBUS_POLICY_DIR}/${DBUS_NAME}.conf
   rm -f ${POLKIT_ACTION_DIR}/${DBUS_NAME}.policy
   # Logs written before the daemon moved to the journal
@@ -173,9 +193,6 @@ comprehensive_cleanup() {
     fi
     cd ..
   fi
-
-  # Remove nitro key configuration
-  rm -rf /etc/damx
 
   # Final systemd daemon reload
   systemctl daemon-reload
@@ -513,6 +530,37 @@ install_drivers() {
   return 0
 }
 
+# Create the daemon's venv and install its wheel into it, with uv where it is
+# installed and with the venv's own pip otherwise
+install_daemon_venv() {
+  local wheel
+  wheel=$(ls DAMX-Daemon/damx_daemon-*.whl 2>/dev/null | head -1)
+  if [ -z "$wheel" ]; then
+    echo -e "${RED}Error: no damx_daemon wheel found in DAMX-Daemon!${NC}"
+    return 1
+  fi
+
+  if ! command -v python3 &> /dev/null; then
+    echo -e "${RED}Error: python3 is required for DAMX-Daemon. Install it with your package manager.${NC}"
+    return 1
+  fi
+
+  rm -rf "${DAEMON_VENV}"
+  if command -v uv &> /dev/null; then
+    # The system Python, not one uv downloads into root's home
+    UV_PYTHON_DOWNLOADS=never uv venv --python "$(command -v python3)" "${DAEMON_VENV}" || return 1
+    uv pip install --python "${DAEMON_VENV}/bin/python" "$wheel" || return 1
+  else
+    if ! python3 -m venv "${DAEMON_VENV}"; then
+      echo -e "${RED}Error: could not create a Python venv. On Debian and Ubuntu, install python3-venv.${NC}"
+      return 1
+    fi
+    "${DAEMON_VENV}/bin/pip" install --disable-pip-version-check --quiet "$wheel" || return 1
+  fi
+
+  ln -sfn "${DAEMON_VENV}/bin/damx-daemon" "${DAEMON_BIN}"
+}
+
 install_daemon() {
   echo -e "${YELLOW}Installing DAMX-Daemon...${NC}"
 
@@ -524,11 +572,10 @@ install_daemon() {
   fi
 
   # Create installation directory
-  mkdir -p ${INSTALL_DIR}/daemon
-
-  # Copy daemon binary
-  cp -f DAMX-Daemon/DAMX-Daemon ${INSTALL_DIR}/daemon/
-  chmod +x ${INSTALL_DIR}/daemon/DAMX-Daemon
+  if ! install_daemon_venv; then
+    echo -e "${RED}Error: failed to install the DAMX-Daemon Python package${NC}"
+    return 1
+  fi
 
   # Let the daemon own its D-Bus name, define the polkit actions it checks,
   # and have the bus pick up the new policy
@@ -536,27 +583,8 @@ install_daemon() {
   install -Dm644 DAMX-Daemon/${DBUS_NAME}.policy ${POLKIT_ACTION_DIR}/${DBUS_NAME}.policy
   busctl call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig
 
-  # Create systemd service file with improved configuration
-  cat > ${SYSTEMD_DIR}/${DAEMON_SERVICE_NAME} << EOL
-[Unit]
-Description=DAMX Daemon for Acer laptops
-Documentation=https://github.com/PXDiv/Div-Acer-Manager-Max
-# Linuwu-Sense, which the installer builds, loads its driver through modules-load.d
-After=systemd-modules-load.service
+  install -Dm644 DAMX-Daemon/${DAEMON_SERVICE_NAME} ${DAEMON_UNIT_DIR}/${DAEMON_SERVICE_NAME}
 
-[Service]
-Type=simple
-ExecStart=${INSTALL_DIR}/daemon/DAMX-Daemon
-Restart=on-failure
-RestartSec=5
-# The daemon logs to the journal under this name
-SyslogIdentifier=damx-daemon
-
-[Install]
-WantedBy=multi-user.target
-EOL
-
-  # Enable and start the service
   systemctl daemon-reload
   systemctl enable ${DAEMON_SERVICE_NAME}
   systemctl start ${DAEMON_SERVICE_NAME}
@@ -858,6 +886,8 @@ perform_install() {
 uninstall() {
   echo -e "${YELLOW}Uninstalling DAMX Suite...${NC}"
   comprehensive_cleanup
+  # Updates keep the configuration; uninstalling removes it
+  rm -rf /etc/damx
   echo -e "${GREEN}DAMX Suite uninstalled successfully!${NC}"
   pause
   return 0
