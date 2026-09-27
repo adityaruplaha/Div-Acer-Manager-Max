@@ -119,7 +119,7 @@ class DAMXManager:
     RESTART_COUNTER_FILE = os.path.join(RESTART_COUNTER_DIR, "restart_attempts")
 
     def __init__(self):
-        '''The initial init (i know very nice description)'''
+        """Detect the driver, the laptop type and the available features"""
         log.info(f"** Starting DAMX-Daemon v{VERSION} **")
 
         # Check that a driver has registered the acer-wmi device
@@ -1128,14 +1128,14 @@ class DaemonServer:
         for client, _ in self.clients:
             try:
                 client.close()
-            except:
+            except OSError:
                 pass
     
         # Close server socket
         if self.socket:
             try:
                 self.socket.close()
-            except:
+            except OSError:
                 pass
     
         # Clean up socket file
@@ -1501,7 +1501,6 @@ class DaemonServer:
                     }
                 
             elif command == "get_modprobe_parameter":
-                print (self.manager.get_modprobe_parameter())
                 return {
                     "success": True,
                     "data": {
@@ -1741,7 +1740,7 @@ class DAMXDaemon:
         try:
             if os.path.exists(PID_FILE):
                 os.unlink(PID_FILE)
-        except:
+        except OSError:
             pass
     
         log.info("Daemon stopped")
@@ -1761,16 +1760,6 @@ def parse_args():
     parser.add_argument('--debug', action='store_true', help="Enable debug logging (same as --verbose)")
     parser.add_argument('--config', type=str, help=f"Path to config file (default: {CONFIG_PATH})")
     return parser.parse_args()
-
-def signal_handler(self, sig, frame):
-    """Handle termination signals"""
-    log.info(f"Received signal {sig}, shutting down...")
-    self.running = False
-    if self.server:
-        self.server.running = False
-    # Ensure socket is cleaned up
-    if hasattr(self, 'server') and self.server:
-        self.server.cleanup_socket()
 
 def main():
     """Main function"""
