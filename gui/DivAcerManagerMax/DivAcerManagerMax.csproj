@@ -24,6 +24,8 @@
         <PackageReference Include="Material.Icons.Avalonia" Version="3.0.2"/>
         <PackageReference Include="MaterialDesign.Icons" Version="1.1.0"/>
         <PackageReference Include="MessageBox.Avalonia" Version="12.0.0"/>
+        <!--The system bus client Avalonia also uses on Linux-->
+        <PackageReference Include="Tmds.DBus.Protocol" Version="0.92.0"/>
     </ItemGroup>
 
     <ItemGroup>

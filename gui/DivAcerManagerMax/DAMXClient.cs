@@ -1,28 +1,36 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net.Sockets;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Tmds.DBus.Protocol;
 
 namespace DivAcerManagerMax;
 
 /// <summary>
-///     Client for communicating with the DAMX-Daemon over Unix socket
+///     Client for the DAMX-Daemon's D-Bus service on the system bus
 /// </summary>
+/// <remarks>
+///     The daemon answers Execute(command, params) with the JSON response the
+///     socket protocol used to carry, and checks commands that change anything
+///     with polkit, which asks for a password where its policy says so.
+/// </remarks>
 public class DAMXClient : IDisposable
 {
-    private const string SocketPath = "/var/run/DAMX.sock";
+    private const string BusName = "io.github.PXDiv.DAMX";
+    private const string ObjectPath = "/io/github/PXDiv/DAMX";
+    private const string Interface = "io.github.PXDiv.DAMX";
+    private const string NotAuthorizedError = "io.github.PXDiv.DAMX.Error.NotAuthorized";
 
-    /// <summary>
-    ///     Send a command to the DAMX-Daemon and receive response
-    /// </summary>
-    /// <param name="command">Command name</param>
-    /// <param name="parameters">Optional parameters</param>
-    /// <returns>Response from daemon as a JsonDocument</returns>
+    // Errors meaning the call never reached the daemon, so that it is safe to send again
+    private static readonly HashSet<string> NotDeliveredErrors = new()
+    {
+        "org.freedesktop.DBus.Error.ServiceUnknown",
+        "org.freedesktop.DBus.Error.NameHasNoOwner"
+    };
+
     private const int MaxRetryAttempts = 3;
 
     private const int RetryDelayMs = 500;
@@ -31,8 +39,8 @@ public class DAMXClient : IDisposable
     // Cache of available features
     private HashSet<string> _availableFeatures = new();
 
+    private DBusConnection? _connection;
     private bool _disposed;
-    private Socket _socket;
 
     public DAMXClient()
     {
@@ -54,38 +62,23 @@ public class DAMXClient : IDisposable
     }
 
     /// <summary>
-    ///     Connect to the DAMX-Daemon Unix socket
+    ///     Connect to the system bus and check that the daemon answers
     /// </summary>
-    /// <returns>True if connection successful, false otherwise</returns>
-    private async Task<bool> ValidateConnection()
-    {
-        if (!IsConnected) return false;
-
-        try
-        {
-            // Send a simple ping command to verify connection
-            var response = await SendCommandAsync("ping");
-            return response.RootElement.GetProperty("success").GetBoolean();
-        }
-        catch
-        {
-            IsConnected = false;
-            return false;
-        }
-    }
-
-// Modify ConnectAsync to include validation
+    /// <returns>True if the daemon answered, false otherwise</returns>
     public async Task<bool> ConnectAsync()
     {
+        if (IsConnected) return true;
+
         try
         {
-            if (IsConnected && await ValidateConnection()) return true;
+            _connection?.Dispose();
+            _connection = new DBusConnection(DBusAddress.System ??
+                                             throw new InvalidOperationException("No system bus address"));
+            await _connection.ConnectAsync();
 
-            _socket?.Dispose();
-            _socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.IP);
-            var endpoint = new UnixDomainSocketEndPoint(SocketPath);
-
-            await _socket.ConnectAsync(endpoint);
+            var response = await ExecuteAsync("ping", null);
+            if (!response.RootElement.GetProperty("success").GetBoolean())
+                throw new InvalidOperationException("The daemon did not answer the ping");
             IsConnected = true;
 
             // Get available features upon connection
@@ -96,7 +89,7 @@ public class DAMXClient : IDisposable
         catch (Exception ex)
         {
             Console.WriteLine($"Failed to connect to daemon: {ex.Message}");
-            IsConnected = false;
+            ResetConnection();
             return false;
         }
     }
@@ -129,23 +122,11 @@ public class DAMXClient : IDisposable
     }
 
     /// <summary>
-    ///     Disconnect from the DAMX-Daemon Unix socket
+    ///     Disconnect from the system bus
     /// </summary>
     public void Disconnect()
     {
-        if (IsConnected)
-            try
-            {
-                _socket?.Close();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error during disconnect: {ex.Message}");
-            }
-            finally
-            {
-                IsConnected = false;
-            }
+        ResetConnection();
     }
 
     public async Task<JsonDocument> SendCommandAsync(string command, Dictionary<string, object> parameters = null)
@@ -166,53 +147,31 @@ public class DAMXClient : IDisposable
 
             try
             {
-                var request = new
-                {
-                    command,
-                    @params = parameters ?? new Dictionary<string, object>()
-                };
-
-                var requestJson = JsonSerializer.Serialize(request);
-                var requestBytes = Encoding.UTF8.GetBytes(requestJson);
-
-                await _socket.SendAsync(requestBytes, SocketFlags.None);
-
-                var buffer = new byte[4096];
-                var received = await _socket.ReceiveAsync(buffer, SocketFlags.None);
-
-                if (received <= 0)
-                {
-                    ResetConnection();
-                    attempt++;
-                    await Task.Delay(RetryDelayMs);
-                    continue;
-                }
-
-                var responseJson = Encoding.UTF8.GetString(buffer, 0, received);
-                return JsonDocument.Parse(responseJson);
+                return await ExecuteAsync(command, parameters);
             }
-            catch (SocketException ex) when (
-                ex.SocketErrorCode == SocketError.ConnectionReset ||
-                ex.SocketErrorCode == SocketError.Shutdown ||
-                ex.SocketErrorCode == SocketError.ConnectionAborted)
+            catch (DBusErrorReplyException ex) when (ex.ErrorName == NotAuthorizedError)
             {
+                // Refused by polkit, or the password prompt was dismissed
+                Console.WriteLine($"Not authorized to run {command}: {ex.ErrorMessage}");
+                return JsonDocument.Parse(JsonSerializer.Serialize(new { success = false, error = ex.ErrorMessage }));
+            }
+            catch (Exception ex) when (ex is DBusConnectionException ||
+                                       (ex is DBusErrorReplyException reply && NotDeliveredErrors.Contains(reply.ErrorName)))
+            {
+                // The daemon is not on the bus, perhaps while it restarts, so
+                // the command was not run and can be sent again
+                Console.WriteLine($"Could not reach daemon: {ex.Message}");
                 ResetConnection();
                 attempt++;
                 await Task.Delay(RetryDelayMs);
             }
-            catch (JsonException ex)
+            catch (Exception ex) when (ex is DBusErrorReplyException or DBusConnectionClosedException or JsonException)
             {
-                Console.WriteLine($"Invalid JSON response from daemon: {ex.Message}");
-
+                // The command may have run, so sending it again could run it
+                // twice; report the failure instead
+                Console.WriteLine($"No valid answer from daemon to {command}: {ex.Message}");
                 ResetConnection();
-                attempt++;
-                await Task.Delay(RetryDelayMs);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error communicating with daemon: {ex.Message}");
-                ResetConnection();
-                throw;
+                return JsonDocument.Parse(JsonSerializer.Serialize(new { success = false, error = ex.Message }));
             }
             finally
             {
@@ -221,6 +180,35 @@ public class DAMXClient : IDisposable
         }
 
         throw new IOException($"Failed to communicate with daemon after {MaxRetryAttempts} attempts");
+    }
+
+    /// <summary>
+    ///     Call Execute on the daemon, allowing polkit to ask for a password
+    /// </summary>
+    private async Task<JsonDocument> ExecuteAsync(string command, Dictionary<string, object>? parameters)
+    {
+        // Another call may have reset the connection while this one waited
+        // its turn; nothing was sent, so SendCommandAsync reconnects and retries
+        var connection = _connection ?? throw new DBusConnectionException("Not connected to the bus");
+
+        MessageBuffer message;
+        using (var writer = connection.GetMessageWriter())
+        {
+            writer.WriteMethodCallHeader(
+                destination: BusName,
+                path: ObjectPath,
+                @interface: Interface,
+                member: "Execute",
+                signature: "ss",
+                flags: MessageFlags.AllowInteractiveAuthorization);
+            writer.WriteString(command);
+            writer.WriteString(JsonSerializer.Serialize(parameters ?? new Dictionary<string, object>()));
+            message = writer.CreateMessage();
+        }
+
+        var responseJson = await connection.CallMethodAsync(
+            message, static (Message reply, object? _) => reply.GetBodyReader().ReadString(), null);
+        return JsonDocument.Parse(responseJson);
     }
 
 
@@ -496,11 +484,7 @@ public class DAMXClient : IDisposable
     {
         if (_disposed) return;
 
-        if (disposing)
-        {
-            Disconnect();
-            _socket?.Dispose();
-        }
+        if (disposing) Disconnect();
 
         _disposed = true;
     }
@@ -508,24 +492,8 @@ public class DAMXClient : IDisposable
     private void ResetConnection()
     {
         IsConnected = false;
-
-        try
-        {
-            _socket?.Shutdown(SocketShutdown.Both);
-        }
-        catch
-        {
-            // Socket may already be closed.
-        }
-
-        try
-        {
-            _socket?.Dispose();
-        }
-        catch
-        {
-            // Ignore cleanup failure.
-        }
+        _connection?.Dispose();
+        _connection = null;
     }
 }
 
