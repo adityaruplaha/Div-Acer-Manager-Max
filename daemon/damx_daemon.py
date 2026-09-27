@@ -113,7 +113,10 @@ class DAMXManager:
     """Manages all the DAMX-Daemon features"""
 
     MAX_RESTART_ATTEMPTS = 20
-    RESTART_COUNTER_FILE = "/tmp/damx_restart_attempts"
+    # Kept in /run, which only root can write and which is cleared at boot,
+    # rather than in world-writable /tmp
+    RESTART_COUNTER_DIR = "/run/damx"
+    RESTART_COUNTER_FILE = os.path.join(RESTART_COUNTER_DIR, "restart_attempts")
 
     def __init__(self):
         '''The initial init (i know very nice description)'''
@@ -192,6 +195,7 @@ class DAMXManager:
         """Increment and return restart attempt count"""
         attempts = self._get_restart_attempts() + 1
         try:
+            os.makedirs(self.RESTART_COUNTER_DIR, mode=0o700, exist_ok=True)
             with open(self.RESTART_COUNTER_FILE, 'w') as f:
                 f.write(str(attempts))
         except IOError as e:
