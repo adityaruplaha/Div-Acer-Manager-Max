@@ -47,7 +47,8 @@
   * Auto-detects feature support per device
   * Talks to the GUI over the D-Bus system bus, and asks polkit before changing anything
   * Lightweight: uses \~20MB RAM
-  * Can run **independently** of GUI
+  * Can run **independently** of GUI, and is started on demand when the GUI calls it
+  * Sandboxed by systemd to the files, devices and privileges it uses
   * Waits for the driver at startup, and reloads Linuwu-Sense once if its settings never appear
 
 * 🖥️ **Modern GUI**
@@ -102,7 +103,7 @@ The daemon needs Python 3.10 or later (`python3`), which most distributions ship
 * The GUI in `/opt/damx/gui`, started by the `DAMX` command
 * The daemon as a Python package in its own environment at `/usr/lib/damx`, run as `/usr/bin/damx-daemon` by `damx-daemon.service` in `/usr/lib/systemd/system`
 * The daemon's config at `/etc/damx/config.ini`, moved there from `/etc/DAMX_Daemon` on the first start; updating keeps it, uninstalling removes it
-* The D-Bus and polkit policies in `/usr/share/dbus-1/system.d` and `/usr/share/polkit-1/actions`
+* The D-Bus and polkit policies in `/usr/share/dbus-1/system.d` and `/usr/share/polkit-1/actions`, and the file that lets the bus start the daemon in `/usr/share/dbus-1/system-services`
 
 ## 🔐 Permissions
 
