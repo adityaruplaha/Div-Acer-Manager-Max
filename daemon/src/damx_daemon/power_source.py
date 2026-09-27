@@ -7,6 +7,8 @@ import logging
 import subprocess
 from threading import Timer
 
+from . import paths
+
 # Get logger from main daemon
 log = logging.getLogger("DAMXDaemon")
 
@@ -48,7 +50,7 @@ class PowerSourceDetector:
     @staticmethod
     def _mains_supplies():
         """Power supplies the kernel reports as mains adapters, whatever their name (AC, ACAD, ADP1, ...)"""
-        for supply in sorted(glob.glob("/sys/class/power_supply/*")):
+        for supply in sorted(glob.glob(os.path.join(paths.POWER_SUPPLY_DIR, "*"))):
             try:
                 with open(os.path.join(supply, "type"), 'r') as f:
                     if f.read().strip() == "Mains":
