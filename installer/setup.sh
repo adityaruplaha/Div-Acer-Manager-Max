@@ -161,6 +161,8 @@ comprehensive_cleanup() {
   rm -f ${ICON_DIR}/damx.png
   rm -f ${DBUS_POLICY_DIR}/${DBUS_NAME}.conf
   rm -f ${POLKIT_ACTION_DIR}/${DBUS_NAME}.policy
+  # Logs written before the daemon moved to the journal
+  rm -f /var/log/DAMX_Daemon_Log.log /var/log/DAMX_Daemon_Log.log.[0-9]
 
   # Uninstall drivers if Linuwu-Sense folder exists
   if [ -d "Linuwu-Sense" ]; then
@@ -547,6 +549,8 @@ Type=simple
 ExecStart=${INSTALL_DIR}/daemon/DAMX-Daemon
 Restart=on-failure
 RestartSec=5
+# The daemon logs to the journal under this name
+SyslogIdentifier=damx-daemon
 
 [Install]
 WantedBy=multi-user.target
