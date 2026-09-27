@@ -21,7 +21,7 @@ jobs:
           python-version: '3.x'
 
       - name: Compile
-        run: python -m py_compile daemon/*.py
+        run: python -m compileall -q daemon
 
   gui:
     runs-on: ubuntu-latest

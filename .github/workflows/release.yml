@@ -73,7 +73,7 @@ jobs:
         echo "gui_version=$GUI_VERSION" >> $GITHUB_OUTPUT
         
         # Detect daemon version  
-        DAEMON_VERSION=$(grep -oP 'VERSION\s*=\s*"\K[\d.]+' Div-Acer-Manager-Max/daemon/damx_daemon.py || echo "unknown")
+        DAEMON_VERSION=$(grep -oP 'VERSION\s*=\s*"\K[\d.]+' Div-Acer-Manager-Max/daemon/src/damx_daemon/__init__.py || echo "unknown")
         echo "daemon_version=$DAEMON_VERSION" >> $GITHUB_OUTPUT
         
         # Detect drivers version based on selected drivers
