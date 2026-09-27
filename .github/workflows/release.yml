@@ -128,8 +128,9 @@ jobs:
            Div-Acer-Manager-Max/daemon/data/damx-daemon.service \
            Div-Acer-Manager-Max/daemon/data/io.github.PXDiv.DAMX.conf \
            Div-Acer-Manager-Max/daemon/data/io.github.PXDiv.DAMX.policy \
+           Div-Acer-Manager-Max/daemon/data/io.github.PXDiv.DAMX.service \
            "${{ env.package_dir }}/DAMX-Daemon/"
-        echo "✓ Daemon wheel, systemd unit and D-Bus and polkit policies copied"
+        echo "✓ Daemon wheel, systemd unit, D-Bus activation file and D-Bus and polkit policies copied"
     
     - name: Copy GUI Executable and Icons
       run: |
