@@ -5,7 +5,9 @@ Documentation=https://github.com/PXDiv/Div-Acer-Manager-Max
 After=systemd-modules-load.service
 
 [Service]
-Type=simple
+# Started once the daemon owns its name, so that clients never find it missing
+Type=dbus
+BusName=io.github.PXDiv.DAMX
 ExecStart=/usr/bin/damx-daemon
 Restart=on-failure
 RestartSec=5
@@ -13,6 +15,33 @@ RestartSec=5
 SyslogIdentifier=damx-daemon
 # Creates /etc/damx, where the daemon keeps its config
 ConfigurationDirectory=damx
+
+# Sandboxing. The daemon writes the driver's settings in sysfs, which
+# ProtectSystem leaves writable, the driver's options in /etc/modprobe.d,
+# and the RGB keyboard's hidraw device; it reloads the driver, which needs
+# CAP_SYS_MODULE, and restarts itself through systemd over D-Bus.
+ProtectSystem=strict
+ReadWritePaths=/etc/modprobe.d
+ProtectHome=yes
+PrivateTmp=yes
+DevicePolicy=closed
+DeviceAllow=char-hidraw rw
+CapabilityBoundingSet=CAP_SYS_MODULE
+NoNewPrivileges=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectProc=invisible
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service @module
+SystemCallErrorNumber=EPERM
+UMask=0022
 
 [Install]
 WantedBy=multi-user.target
