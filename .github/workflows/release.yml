@@ -147,13 +147,9 @@ jobs:
         chmod +x "${{ env.package_dir }}/DAMX-GUI/DivAcerManagerMax"
         
         # Copy icon files if they exist
-        if [ -f "Div-Acer-Manager-Max/gui/DivAcerManagerMax/icon.png" ]; then
-          cp "Div-Acer-Manager-Max/gui/DivAcerManagerMax/icon.png" "${{ env.package_dir }}/DAMX-GUI/"
-        fi
-        
-        if [ -f "Div-Acer-Manager-Max/gui/DivAcerManagerMax/iconTransparent.png" ]; then
-          cp "Div-Acer-Manager-Max/gui/DivAcerManagerMax/iconTransparent.png" "${{ env.package_dir }}/DAMX-GUI/"
-        fi
+        cp Div-Acer-Manager-Max/gui/DivAcerManagerMax/Assets/icon.png \
+           Div-Acer-Manager-Max/gui/DivAcerManagerMax/Assets/iconTransparent.png \
+           "${{ env.package_dir }}/DAMX-GUI/"
         
         echo "✓ GUI executable and icons copied"
     

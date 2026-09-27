@@ -27,20 +27,7 @@
     </ItemGroup>
 
     <ItemGroup>
-
-    </ItemGroup>
-
-    <ItemGroup>
-        <AvaloniaResource Include="Assets\Fonts\OpenSans-SemiBold.ttf"/>
-        <AvaloniaResource Include="Assets\Fonts\OpenSans.ttf"/>
-        <AvaloniaResource Include="Assets\Fonts\Oxanium-Bold.ttf"/>
-        <AvaloniaResource Include="Assets\Fonts\Oxanium.ttf"/>
-        <None Remove="iconTransparent.png"/>
-        <AvaloniaResource Include="iconTransparent.png"/>
-        <None Remove="icon.png"/>
-        <AvaloniaResource Include="icon.png"/>
-        <None Remove="closeupTransparent.png"/>
-        <AvaloniaResource Include="closeupTransparent.png"/>
+        <AvaloniaResource Include="Assets\**"/>
     </ItemGroup>
 
     <ItemGroup>

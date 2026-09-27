@@ -3,7 +3,7 @@
         x:Class="DivAcerManagerMax.InternalsManager"
         Width="600" Height="700"
         Title="DAMX Internals Manager"
-        Icon="iconTransparent.png"
+        Icon="/Assets/iconTransparent.png"
         WindowStartupLocation="CenterOwner"
         Background="#0e0e11">
 
