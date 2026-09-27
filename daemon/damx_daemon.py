@@ -212,14 +212,14 @@ class DAMXManager:
 
         try:
             # Remove the module
-            subprocess.run(['sudo', 'rmmod', self.driver_module], check=True)
+            subprocess.run(['rmmod', self.driver_module], check=True)
             log.info(f"Successfully removed {self.driver_module} module")
             
             # Wait a moment
             time.sleep(2)
             
             # Reload the module
-            subprocess.run(['sudo', 'modprobe', self.driver_module, 'nitro_v4'], check=True)
+            subprocess.run(['modprobe', self.driver_module, 'nitro_v4'], check=True)
             log.info(f"Successfully reloaded {self.driver_module} module")
             
             # Wait a moment for module to initialize
@@ -227,7 +227,7 @@ class DAMXManager:
             
             # Restart the daemon service
             log.info("Restarting DAMX daemon service (may produce an error)")
-            subprocess.run(['sudo', 'systemctl', 'restart', 'damx-daemon.service'], check=True)
+            subprocess.run(['systemctl', 'restart', 'damx-daemon.service'], check=True)
             
             return True
         
@@ -242,14 +242,14 @@ class DAMXManager:
 
         try:
             # Remove the module
-            subprocess.run(['sudo', 'rmmod', self.driver_module], check=True)
+            subprocess.run(['rmmod', self.driver_module], check=True)
             log.info(f"Successfully removed {self.driver_module} module")
             
             # Wait a moment
             time.sleep(2)
             
             # Reload the module
-            subprocess.run(['sudo', 'modprobe', self.driver_module, 'predator_v4'], check=True)
+            subprocess.run(['modprobe', self.driver_module, 'predator_v4'], check=True)
             log.info(f"Successfully reloaded {self.driver_module} module")
 
             # Wait a moment for module to initialize
@@ -257,7 +257,7 @@ class DAMXManager:
 
             # Restart the daemon service
             log.info("Restarting DAMX daemon service (may produce an error)")
-            subprocess.run(['sudo', 'systemctl', 'restart', 'damx-daemon.service'], check=True)
+            subprocess.run(['systemctl', 'restart', 'damx-daemon.service'], check=True)
 
             return True
 
@@ -275,14 +275,14 @@ class DAMXManager:
 
         try:
             # Remove the module
-            subprocess.run(['sudo', 'rmmod', self.driver_module], check=True)
+            subprocess.run(['rmmod', self.driver_module], check=True)
             log.info(f"Successfully removed {self.driver_module} module")
             
             # Wait a moment
             time.sleep(2)
             
             # Reload the module
-            subprocess.run(['sudo', 'modprobe', self.driver_module, 'enable_all'], check=True)
+            subprocess.run(['modprobe', self.driver_module, 'enable_all'], check=True)
             log.info(f"Successfully reloaded {self.driver_module} module with enable_all parameter")
             
             # Wait a moment for module to initialize
@@ -290,7 +290,7 @@ class DAMXManager:
             
             # Restart the daemon service
             log.info("Restarting DAMX daemon service (may produce an error)")
-            subprocess.run(['sudo', 'systemctl', 'restart', 'damx-daemon.service'], check=True)
+            subprocess.run(['systemctl', 'restart', 'damx-daemon.service'], check=True)
             
             return True
         
@@ -437,7 +437,7 @@ class DAMXManager:
         try:
             # Restart the daemon service
             log.info("Restarting DAMX daemon service (may produce an error)")
-            subprocess.run(['sudo', 'systemctl', 'restart', 'damx-daemon.service'], check=True)
+            subprocess.run(['systemctl', 'restart', 'damx-daemon.service'], check=True)
             
             return True
             
@@ -453,14 +453,14 @@ class DAMXManager:
         
         try:
             # Remove the module
-            subprocess.run(['sudo', 'rmmod', self.driver_module], check=True)
+            subprocess.run(['rmmod', self.driver_module], check=True)
             log.info(f"Successfully removed {self.driver_module} module")
             
             # Wait a moment
             time.sleep(2)
             
             # Reload the module
-            subprocess.run(['sudo', 'modprobe', self.driver_module], check=True)
+            subprocess.run(['modprobe', self.driver_module], check=True)
             log.info(f"Successfully reloaded {self.driver_module} module")
             
             # Wait a moment for module to initialize
@@ -468,7 +468,7 @@ class DAMXManager:
             
             # Restart the daemon service
             log.info("Restarting DAMX daemon service (may produce an error)")
-            subprocess.run(['sudo', 'systemctl', 'restart', 'damx-daemon.service'], check=True)
+            subprocess.run(['systemctl', 'restart', 'damx-daemon.service'], check=True)
             
             return True
             
