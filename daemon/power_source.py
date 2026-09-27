@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # DAMX Power Source Detection - Monitors power source and adjusts thermal profiles accordingly
 
+import glob
 import os
 import logging
 import subprocess
@@ -19,13 +20,6 @@ class PowerSourceDetector:
         self.timer = None
         
         log.info("PowerSourceDetector initialized")
-        
-        self.possible_power_supply_paths = [
-            "/sys/class/power_supply/AC/online",
-            "/sys/class/power_supply/ACAD/online",
-            "/sys/class/power_supply/ADP1/online",
-            "/sys/class/power_supply/AC0/online"
-        ]
 
     def start_monitoring(self):
         """Start periodic power source checking"""
@@ -51,17 +45,30 @@ class PowerSourceDetector:
         self.timer.daemon = True
         self.timer.start()
 
+    @staticmethod
+    def _mains_supplies():
+        """Power supplies the kernel reports as mains adapters, whatever their name (AC, ACAD, ADP1, ...)"""
+        for supply in sorted(glob.glob("/sys/class/power_supply/*")):
+            try:
+                with open(os.path.join(supply, "type"), 'r') as f:
+                    if f.read().strip() == "Mains":
+                        yield supply
+            except OSError:
+                continue
+
     def _is_ac_connected(self) -> bool:
         """Check if AC power is connected"""
         try:
-            # Try each possible path for power supply status
-            for path in self.possible_power_supply_paths:
-                if os.path.exists(path):
+            online_files = [os.path.join(supply, "online") for supply in self._mains_supplies()]
+            online_files = [path for path in online_files if os.path.exists(path)]
+            if online_files:
+                for path in online_files:
                     with open(path, 'r') as f:
-                        status = f.read().strip()
-                        return status == "1"
+                        if f.read().strip() == "1":
+                            return True
+                return False
 
-            # If no power supply file is found, try command-line tools
+            # If the kernel exposes no mains supply, try command-line tools
             return self._check_using_upower() or self._check_using_acpi()
 
         except Exception as e:
