@@ -527,16 +527,15 @@ install_daemon() {
   cat > ${SYSTEMD_DIR}/${DAEMON_SERVICE_NAME} << EOL
 [Unit]
 Description=DAMX Daemon for Acer laptops
-After=network.target
+Documentation=https://github.com/PXDiv/Div-Acer-Manager-Max
+# Linuwu-Sense, which the installer builds, loads its driver through modules-load.d
+After=systemd-modules-load.service
 
 [Service]
 Type=simple
 ExecStart=${INSTALL_DIR}/daemon/DAMX-Daemon
 Restart=on-failure
 RestartSec=5
-User=root
-StandardOutput=journal
-StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
