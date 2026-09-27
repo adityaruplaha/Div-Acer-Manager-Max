@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # DAMX Power Source Detection - Monitors power source and adjusts thermal profiles accordingly
 
-import os
 import logging
+import os
 import subprocess
 from threading import Timer
 from typing import Optional
