@@ -8,7 +8,7 @@
 
         x:Class="DivAcerManagerMax.MainWindow"
         Title="DAMX"
-        Icon="iconTransparent.png"
+        Icon="/Assets/iconTransparent.png"
         WindowStartupLocation="CenterScreen"
         SystemDecorations="Full"
         Background="#0e0e11"
@@ -22,7 +22,7 @@
         <Grid RowDefinitions="Auto,*">
 
             <!-- App Header -->
-            <Image Source="closeupTransparent.png" Height="40" Margin="0" HorizontalAlignment="Center"
+            <Image Source="/Assets/closeupTransparent.png" Height="40" Margin="0" HorizontalAlignment="Center"
                    VerticalAlignment="Bottom" />
             <Border Grid.Row="0" Padding="0 20 0 0" CornerRadius="20">
 
