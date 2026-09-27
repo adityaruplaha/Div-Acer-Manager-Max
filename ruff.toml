@@ -2,3 +2,8 @@
 # today. Style rules can be enabled once the code has been formatted.
 [lint]
 select = ["F"]
+
+# dbus-fast takes D-Bus type signatures as string annotations, which pyflakes
+# tries to parse as Python
+[lint.per-file-ignores]
+"daemon/**/*dbus*.py" = ["F821", "F722"]

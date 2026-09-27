@@ -61,9 +61,9 @@ jobs:
       with:
         dotnet-version: '9.0.x'
     
-    - name: Install PyInstaller
+    - name: Install PyInstaller and the daemon's dependencies
       run: |
-        pip install pyinstaller
+        pip install pyinstaller dbus-fast
     
     - name: Detect versions from source files
       id: versions

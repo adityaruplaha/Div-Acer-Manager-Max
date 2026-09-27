@@ -1,184 +1,18 @@
-"""Unix socket server for IPC with the GUI client"""
+"""The commands the GUI sends to the daemon"""
 
-import codecs
-import json
-import os
-import select
-import socket
-import threading
 import traceback
 from typing import Dict
 
-from . import VERSION, paths
+from . import VERSION
 from .logs import log
 from .manager import DAMXManager
 
 
-class DaemonServer:
-    """Unix Socket server for IPC with the GUI client"""
-
-    # Limits on what a client can make the daemon hold
-    MAX_CLIENTS = 16
-    MAX_REQUEST_SIZE = 64 * 1024
-    # How long to wait for the rest of a request split across several reads
-    CONTINUATION_TIMEOUT = 0.1
+class CommandProcessor:
+    """Runs the GUI's commands against the manager, independently of how they arrive"""
 
     def __init__(self, manager: DAMXManager):
         self.manager = manager
-        self.socket = None
-        self.running = False
-        self.clients = []
-
-    def start(self):
-        """Start the Unix socket server"""
-        # Remove socket if it already exists
-        try:
-            if os.path.exists(paths.SOCKET_PATH):
-                os.unlink(paths.SOCKET_PATH)
-        except OSError as e:
-            log.error(f"Failed to remove existing socket: {e}")
-            return False
-
-        try:
-            self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            self.socket.bind(paths.SOCKET_PATH)
-            # Ensure socket permissions allow non-root access
-            os.chmod(paths.SOCKET_PATH, 0o666)
-            self.socket.listen(5)
-            self.socket.settimeout(1)  # 1 second timeout for clean shutdown
-            self.running = True
-
-            log.info(f"Server listening on {paths.SOCKET_PATH}")
-
-            # Accept connections in a loop
-            while self.running:
-                try:
-                    client, _ = self.socket.accept()
-
-                    # Forget clients whose connections have closed
-                    self.clients = [(c, t) for c, t in self.clients if t.is_alive()]
-                    if len(self.clients) >= self.MAX_CLIENTS:
-                        log.warning(f"Refusing connection: {self.MAX_CLIENTS} clients already connected")
-                        client.close()
-                        continue
-
-                    client_thread = threading.Thread(target=self.handle_client, args=(client,))
-                    client_thread.daemon = True
-                    client_thread.start()
-                    self.clients.append((client, client_thread))
-                except socket.timeout:
-                    # This is expected due to the timeout
-                    continue
-                except Exception as e:
-                    if self.running:  # Only log if not shutting down
-                        log.error(f"Error accepting connection: {e}")
-
-            return True
-
-        except Exception as e:
-            log.error(f"Failed to start server: {e}")
-            return False
-
-    def stop(self):
-        """Stop the server and clean up"""
-        log.info("Stopping server...")
-        self.running = False
-    
-        # Close all client connections
-        for client, _ in self.clients:
-            try:
-                client.close()
-            except OSError:
-                pass
-    
-        # Close server socket
-        if self.socket:
-            try:
-                self.socket.close()
-            except OSError:
-                pass
-    
-        # Clean up socket file
-        self.cleanup_socket()
-
-    def cleanup_socket(self):
-        """Clean up the socket file"""
-        try:
-            if os.path.exists(paths.SOCKET_PATH):
-                os.unlink(paths.SOCKET_PATH)
-                log.info(f"Removed socket file: {paths.SOCKET_PATH}")
-        except Exception as e:
-            log.error(f"Failed to remove socket file: {e}")
-
-
-    def _more_data_pending(self, client_socket) -> bool:
-        """Whether more of a request arrives within CONTINUATION_TIMEOUT"""
-        readable, _, _ = select.select([client_socket], [], [], self.CONTINUATION_TIMEOUT)
-        return bool(readable)
-
-    @staticmethod
-    def _send(client_socket, response: Dict):
-        client_socket.sendall(json.dumps(response).encode('utf-8'))
-
-    def handle_client(self, client_socket):
-        """Handle communication with a client
-
-        Requests are JSON objects with no delimiter between them. A request
-        may arrive split across several reads, so data is buffered until a
-        complete object decodes, up to MAX_REQUEST_SIZE.
-        """
-        decoder = json.JSONDecoder()
-        utf8 = codecs.getincrementaldecoder('utf-8')()
-        buffer = ""
-        try:
-            while self.running:
-                data = client_socket.recv(4096)
-                if not data:
-                    break
-
-                try:
-                    buffer += utf8.decode(data)
-                except UnicodeDecodeError:
-                    log.error("Invalid UTF-8 received")
-                    self._send(client_socket, {"success": False, "error": "Invalid JSON format"})
-                    utf8.reset()
-                    buffer = ""
-                    continue
-
-                while buffer.strip():
-                    buffer = buffer.lstrip()
-                    try:
-                        request, end = decoder.raw_decode(buffer)
-                    except json.JSONDecodeError:
-                        if len(buffer) < self.MAX_REQUEST_SIZE and self._more_data_pending(client_socket):
-                            break  # the rest of the request is still arriving
-                        log.error("Invalid JSON received")
-                        self._send(client_socket, {"success": False, "error": "Invalid JSON format"})
-                        buffer = ""
-                        break
-                    buffer = buffer[end:]
-
-                    if not isinstance(request, dict):
-                        self._send(client_socket, {"success": False, "error": "Request must be a JSON object"})
-                        continue
-
-                    try:
-                        command = request.get("command", "")
-                        params = request.get("params") or {}
-                        self._send(client_socket, self.process_command(command, params))
-                    except Exception as e:
-                        log.error(f"Error processing request: {e}")
-                        log.error(traceback.format_exc())
-                        self._send(client_socket, {"success": False, "error": str(e)})
-
-        except Exception as e:
-            if self.running:  # Only log if not shutting down
-                log.error(f"Client connection error: {e}")
-        finally:
-            try:
-                client_socket.close()
-            except OSError:
-                pass
 
     def process_command(self, command: str, params: Dict) -> Dict:
         """Process a command from the client"""

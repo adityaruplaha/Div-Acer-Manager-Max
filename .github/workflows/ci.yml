@@ -20,7 +20,7 @@ jobs:
 
       - name: Test
         working-directory: daemon
-        run: uv run --no-project --with pytest pytest
+        run: uv run --no-project --with pytest --with dbus-fast pytest
 
   gui:
     runs-on: ubuntu-latest

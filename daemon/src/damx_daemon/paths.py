@@ -1,6 +1,5 @@
 """Filesystem locations the daemon uses, in one place so that tests can point them elsewhere"""
 
-SOCKET_PATH = "/var/run/DAMX.sock"
 LOG_PATH = "/var/log/DAMX_Daemon_Log.log"
 CONFIG_PATH = "/etc/DAMX_Daemon/config.ini"
 PID_FILE = "/var/run/DAMX-Daemon.pid"
