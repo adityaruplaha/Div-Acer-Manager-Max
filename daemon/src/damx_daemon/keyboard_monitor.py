@@ -3,17 +3,17 @@
 KeyboardMonitor - Simple keyboard monitor that launches GUI as regular user
 """
 
+import logging
 import os
-import struct
+import platform
 import select
+import struct
 import subprocess
 import threading
-import logging
 import time
 from pathlib import Path
 
 # Determine if we're on 64-bit system
-import platform
 IS_64BIT = platform.machine().endswith('64')
 EVENT_SIZE = 24 if IS_64BIT else 16
 

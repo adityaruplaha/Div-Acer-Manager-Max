@@ -2,8 +2,8 @@
 # DAMX Power Source Detection - Monitors power source and adjusts thermal profiles accordingly
 
 import glob
-import os
 import logging
+import os
 import subprocess
 from threading import Timer
 

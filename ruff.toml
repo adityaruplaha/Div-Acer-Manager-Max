@@ -1,7 +1,13 @@
-# Lint for real errors (the pyflakes rules) only, which the daemon passes
-# today. Style rules can be enabled once the code has been formatted.
+# Wrap sorted imports at the width the code already uses
+line-length = 120
+
+# The daemon is a src layout, so tell the import sorter what is first-party
+src = ["daemon/src"]
+
+# Lint for real errors (the pyflakes rules) and import order (the isort
+# rules). Style rules can be enabled once the code has been formatted.
 [lint]
-select = ["F"]
+select = ["F", "I"]
 
 # dbus-fast takes D-Bus type signatures as string annotations, which pyflakes
 # tries to parse as Python
