@@ -123,7 +123,7 @@ remapper's config instead (after keyd it typically surfaces as `f16` /
 
 ## 🖥️ Troubleshooting
 
-You can check the logs with `journalctl -u damx-daemon.service`
+The daemon logs to the systemd journal. Open **View Daemon Logs** in the Internals Manager to see its recent log, or run `journalctl -u damx-daemon.service` (add `-f` to follow it). Reading a system service's log needs membership of a group such as `wheel`, `adm` or `systemd-journal`, which administrators usually have.
 
 If you get UNKNOWN as Laptop type, the driver did not provide its settings in time: the daemon waits a few seconds for them and reloads Linuwu-Sense once, and restarting the laptop may still help
 But if it still happens that might mean the Drivers Installation failed, Make sure you have the appropriate kernel headers to compile the drivers.
