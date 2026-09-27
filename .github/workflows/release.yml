@@ -93,14 +93,9 @@ jobs:
     - name: Build Python Daemon
       run: |
         cd Div-Acer-Manager-Max/daemon
-        
-        # Install dependencies if requirements.txt exists
-        if [ -f requirements.txt ]; then
-          pip install -r requirements.txt
-        fi
-        
-        # Build with PyInstaller
-        pyinstaller --onefile --clean damx_daemon.py
+
+        # Build with PyInstaller from the tracked spec
+        pyinstaller --clean damx_daemon.spec
         
         echo "✓ Daemon built successfully"
         ls -la dist/
@@ -169,14 +164,7 @@ jobs:
     
     - name: Copy and Update Setup Script
       run: |
-        if [ -f "Div-Acer-Manager-Max/installer/setup.sh" ]; then
-          cp "Div-Acer-Manager-Max/installer/setup.sh" "${{ env.package_dir }}/setup.sh"
-        elif [ -f "installer/setup.sh" ]; then
-          cp "installer/setup.sh" "${{ env.package_dir }}/setup.sh"
-        else
-          echo "Error: setup.sh not found"
-          exit 1
-        fi
+        cp Div-Acer-Manager-Max/installer/setup.sh "${{ env.package_dir }}/setup.sh"
         
         # Update version information in setup script
         sed -i "s/SCRIPT_VERSION\s*=\s*\".*\"/SCRIPT_VERSION=\"${{ steps.versions.outputs.gui_version }}\"/g" "${{ env.package_dir }}/setup.sh"
@@ -188,12 +176,8 @@ jobs:
         echo "✓ Setup script updated and made executable"
         
         # Copy nitro key detection script alongside setup.sh
-        if [ -f "Div-Acer-Manager-Max/installer/nitro-key-detection.sh" ]; then
-          cp "Div-Acer-Manager-Max/installer/nitro-key-detection.sh" "${{ env.package_dir }}/"
-          echo "✓ nitro-key-detection.sh copied"
-        else
-          echo "Warning: nitro-key-detection.sh not found, skipping"
-        fi
+        cp Div-Acer-Manager-Max/installer/nitro-key-detection.sh "${{ env.package_dir }}/"
+        echo "✓ nitro-key-detection.sh copied"
 
     - name: Validate Packaged Installer
       run: |
