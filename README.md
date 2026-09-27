@@ -46,7 +46,7 @@
 
   * Auto-detects feature support per device
   * Talks to the GUI over the D-Bus system bus, and asks polkit before changing anything
-  * Lightweight: uses \~10MB RAM
+  * Lightweight: uses \~20MB RAM
   * Can run **independently** of GUI
   * Waits for the driver at startup, and reloads Linuwu-Sense once if its settings never appear
 
@@ -64,6 +64,8 @@ Check your device's compatibility here: [Compatibility List](https://github.com/
 > Even if not here, DAMX will still work on most devices. Please file a issue on Linuwu-sense page (it will be ignored here)
 
 ## 🖥️ DAMX Installation Guide
+
+The daemon needs Python 3.10 or later (`python3`), which most distributions ship. On Debian and Ubuntu, also install `python3-venv`. The installer uses [uv](https://docs.astral.sh/uv/) to set up the daemon if it is installed.
 
 1. Download the latest release from the **[Releases](https://github.com/PXDiv/Div-Acer-Manager-Max/releases)** section.
 
@@ -94,6 +96,13 @@ Check your device's compatibility here: [Compatibility List](https://github.com/
 6. Reboot your system after the installation completes.
 
 ✅ That’s it—you’re all set!
+
+## 📂 Where DAMX Installs
+
+* The GUI in `/opt/damx/gui`, started by the `DAMX` command
+* The daemon as a Python package in its own environment at `/usr/lib/damx`, run as `/usr/bin/damx-daemon` by `damx-daemon.service` in `/usr/lib/systemd/system`
+* The daemon's config at `/etc/damx/config.ini`, moved there from `/etc/DAMX_Daemon` on the first start; updating keeps it, uninstalling removes it
+* The D-Bus and polkit policies in `/usr/share/dbus-1/system.d` and `/usr/share/polkit-1/actions`
 
 ## 🔐 Permissions
 
@@ -148,6 +157,8 @@ The custom drivers for this project [Div-Linuwu Sense project](https://github.co
 * Report bugs or request features via GitHub Issues
 * Submit pull requests to improve code or UI
 * Help test on different Acer laptop models
+
+The daemon's tests run with [uv](https://docs.astral.sh/uv/): `cd daemon && uv run pytest`.
 
 ## 📄 License
 
