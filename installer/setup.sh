@@ -12,6 +12,9 @@ SYSTEMD_DIR="/etc/systemd/system"
 DAEMON_SERVICE_NAME="damx-daemon.service"
 DESKTOP_FILE_DIR="/usr/share/applications"
 ICON_DIR="/usr/share/icons/hicolor/256x256/apps"
+DBUS_NAME="io.github.PXDiv.DAMX"
+DBUS_POLICY_DIR="/usr/share/dbus-1/system.d"
+POLKIT_ACTION_DIR="/usr/share/polkit-1/actions"
 MODULE_SIGNING_DIR="/var/lib/damx/secureboot"
 MODULE_SIGNING_KEY="${MODULE_SIGNING_DIR}/DAMX-MOK.priv"
 MODULE_SIGNING_CERT="${MODULE_SIGNING_DIR}/DAMX-MOK.der"
@@ -156,6 +159,8 @@ comprehensive_cleanup() {
   rm -f ${BIN_DIR}/DAMX
   rm -f ${DESKTOP_FILE_DIR}/damx.desktop
   rm -f ${ICON_DIR}/damx.png
+  rm -f ${DBUS_POLICY_DIR}/${DBUS_NAME}.conf
+  rm -f ${POLKIT_ACTION_DIR}/${DBUS_NAME}.policy
 
   # Uninstall drivers if Linuwu-Sense folder exists
   if [ -d "Linuwu-Sense" ]; then
@@ -522,6 +527,12 @@ install_daemon() {
   # Copy daemon binary
   cp -f DAMX-Daemon/DAMX-Daemon ${INSTALL_DIR}/daemon/
   chmod +x ${INSTALL_DIR}/daemon/DAMX-Daemon
+
+  # Let the daemon own its D-Bus name, define the polkit actions it checks,
+  # and have the bus pick up the new policy
+  install -Dm644 DAMX-Daemon/${DBUS_NAME}.conf ${DBUS_POLICY_DIR}/${DBUS_NAME}.conf
+  install -Dm644 DAMX-Daemon/${DBUS_NAME}.policy ${POLKIT_ACTION_DIR}/${DBUS_NAME}.policy
+  busctl call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig
 
   # Create systemd service file with improved configuration
   cat > ${SYSTEMD_DIR}/${DAEMON_SERVICE_NAME} << EOL
