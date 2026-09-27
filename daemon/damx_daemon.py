@@ -21,7 +21,6 @@ import threading
 import signal
 import configparser
 import traceback
-from pathlib import Path
 from enum import Enum
 from power_source import PowerSourceDetector
 from typing import Dict, List, Tuple, Set
@@ -446,7 +445,7 @@ class DAMXManager:
     def _restart_daemon(self):
         """Restart DAMX daemon service alone"""
         attempts = self._get_restart_attempts()
-        log.info(f"Attempting to restart daemon")
+        log.info("Attempting to restart daemon")
         
         try:
             # Restart the daemon service
