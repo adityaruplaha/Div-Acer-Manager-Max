@@ -1,4 +1,4 @@
-"""Entry point, for `python -m damx_daemon` and the PyInstaller build"""
+"""Entry point for `python -m damx_daemon`"""
 
 from damx_daemon.daemon import main
 

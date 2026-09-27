@@ -51,19 +51,13 @@ jobs:
         echo "✓ Drivers repository cloned successfully"
         ls -la drivers-temp/
     
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v6
     
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '9.0.x'
-    
-    - name: Install PyInstaller and the daemon's dependencies
-      run: |
-        pip install pyinstaller dbus-fast
     
     - name: Detect versions from source files
       id: versions
@@ -94,8 +88,8 @@ jobs:
       run: |
         cd Div-Acer-Manager-Max/daemon
 
-        # Build with PyInstaller from the tracked spec
-        pyinstaller --clean damx_daemon.spec
+        # A wheel, which the installer puts in a venv under /usr/lib/damx
+        uv build --wheel
         
         echo "✓ Daemon built successfully"
         ls -la dist/
@@ -128,14 +122,14 @@ jobs:
         echo "package_dir=$PACKAGE_DIR" >> $GITHUB_ENV
         echo "package_version=$PACKAGE_VERSION" >> $GITHUB_ENV
     
-    - name: Copy Daemon Executable and Policies
+    - name: Copy Daemon Wheel, Unit and Policies
       run: |
-        cp Div-Acer-Manager-Max/daemon/dist/DAMX-Daemon "${{ env.package_dir }}/DAMX-Daemon/"
-        chmod +x "${{ env.package_dir }}/DAMX-Daemon/DAMX-Daemon"
-        cp Div-Acer-Manager-Max/daemon/data/io.github.PXDiv.DAMX.conf \
+        cp Div-Acer-Manager-Max/daemon/dist/damx_daemon-*.whl \
+           Div-Acer-Manager-Max/daemon/data/damx-daemon.service \
+           Div-Acer-Manager-Max/daemon/data/io.github.PXDiv.DAMX.conf \
            Div-Acer-Manager-Max/daemon/data/io.github.PXDiv.DAMX.policy \
            "${{ env.package_dir }}/DAMX-Daemon/"
-        echo "✓ Daemon executable and D-Bus and polkit policies copied"
+        echo "✓ Daemon wheel, systemd unit and D-Bus and polkit policies copied"
     
     - name: Copy GUI Executable and Icons
       run: |
@@ -212,7 +206,7 @@ jobs:
         Commit: ${{ github.sha }}
         
         Components:
-        - DAMX-Daemon: Python daemon compiled with PyInstaller
+        - DAMX-Daemon: Python daemon as a wheel, installed into a venv under /usr/lib/damx
         - DAMX-GUI: .NET 9.0 GUI application (self-contained)
         - Linuwu-Sense: Hardware drivers
         - setup.sh: Installation script
@@ -271,7 +265,7 @@ jobs:
           - **Drivers Type**: ${{ steps.versions.outputs.drivers_type }}
           
           ## Components
-          - **DAMX-Daemon**: Python daemon compiled with PyInstaller
+          - **DAMX-Daemon**: Python daemon as a wheel, installed into a venv under /usr/lib/damx
           - **DAMX-GUI**: .NET 9.0 GUI application (self-contained, linux-x64)
           - **Linuwu-Sense**: Hardware drivers (${{ steps.versions.outputs.drivers_type }})
           - **setup.sh**: Installation script
