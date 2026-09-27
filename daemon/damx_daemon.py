@@ -1608,11 +1608,13 @@ class DaemonServer:
 class DAMXDaemon:
     """Main daemon class that manages the lifecycle"""
 
-    def __init__(self):
+    def __init__(self, verbose: bool = False):
         self.running = False
         self.manager = None
         self.server = None
         self.config = None
+        # --verbose/--debug force debug logging over the configured level
+        self.verbose = verbose
 
     def load_config(self):
         """Load configuration from file"""
@@ -1639,13 +1641,15 @@ class DAMXDaemon:
         self.config = config
 
         # Set log level from config
-        if 'General' in config and 'LogLevel' in config['General']:
+        if self.verbose:
+            log.setLevel(logging.DEBUG)
+        elif 'General' in config and 'LogLevel' in config['General']:
             log_level = config['General']['LogLevel'].upper()
             if log_level in ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'):
-                #log.setLevel(getattr(logging, log_level))
-                log.setLevel(logging.DEBUG)
-                
+                log.setLevel(getattr(logging, log_level))
                 log.info(f"Log level set to {log_level}")
+            else:
+                log.warning(f"Unknown LogLevel {log_level!r} in {CONFIG_PATH}, keeping {logging.getLevelName(log.level)}")
 
         return config
 
@@ -1754,7 +1758,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="DAMX-Daemon")
     parser.add_argument('-v', '--verbose', action='store_true', help="Enable verbose logging")
     parser.add_argument('--version', action='version', version=f"DAMX-Daemon v{VERSION}")
-    parser.add_argument('--debug', action='store_true', help="Enable debug mode")
+    parser.add_argument('--debug', action='store_true', help="Enable debug logging (same as --verbose)")
     parser.add_argument('--config', type=str, help=f"Path to config file (default: {CONFIG_PATH})")
     return parser.parse_args()
 
@@ -1773,7 +1777,8 @@ def main():
     args = parse_args()
 
     # Set log level based on verbosity
-    if args.verbose:
+    verbose = args.verbose or args.debug
+    if verbose:
         log.setLevel(logging.DEBUG)
         log.debug("Debug logging enabled")
 
@@ -1782,7 +1787,7 @@ def main():
     if args.config:
         CONFIG_PATH = args.config
 
-    daemon = DAMXDaemon()
+    daemon = DAMXDaemon(verbose=verbose)
     if daemon.setup():
         daemon.run()
     else:
