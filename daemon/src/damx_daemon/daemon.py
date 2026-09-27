@@ -1,6 +1,7 @@
 """The daemon's lifecycle and command line"""
 
 import argparse
+import asyncio
 import configparser
 import io
 import logging
@@ -10,11 +11,13 @@ import sys
 import traceback
 
 from . import VERSION, paths
+from .commands import CommandProcessor
+from .dbus_service import DBusService
 from .files import atomic_write
 from .logs import log, setup_logging
 from .manager import DAMXManager
 from .power_source import PowerSourceDetector
-from .server import DaemonServer
+
 # from .keyboard_monitor import KeyboardMonitor
 
 
@@ -107,10 +110,6 @@ class DAMXDaemon:
         with open(paths.PID_FILE, 'w') as f:
             f.write(str(os.getpid()))
 
-        # Set up signal handlers
-        signal.signal(signal.SIGTERM, self.signal_handler)
-        signal.signal(signal.SIGINT, self.signal_handler)
-
         # if self.keyboard_monitor:
         #     success = self.keyboard_monitor.start_monitoring()
         #     if success:
@@ -121,26 +120,29 @@ class DAMXDaemon:
         # Set up and run the server
         try:
             self.running = True
-            self.server = DaemonServer(self.manager)
             self.power_monitor.start_monitoring()
-            self.server.start()
-            # Start keyboard monitoring
-            
+            asyncio.run(self._serve())
         except Exception as e:
             log.error(f"Error running daemon: {e}")
             log.error(traceback.format_exc())
         finally:
             self.cleanup()
 
+    async def _serve(self):
+        """Serve the D-Bus interface until SIGTERM or SIGINT"""
+        self.stop = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, self.signal_handler, sig)
+
+        self.server = DBusService(CommandProcessor(self.manager))
+        await self.server.run(self.stop)
+
     def cleanup(self):
         """Clean up resources"""
         log.info("Cleaning up resources...")
-    
-        # Stop server and clean up socket
-        if self.server:
-            self.server.stop()
-            self.server.cleanup_socket()  # Additional cleanup
-            # Stop keyboard monitoring
+
+        # Stop keyboard monitoring
         # if hasattr(self, 'keyboard_monitor') and self.keyboard_monitor:
         #     self.keyboard_monitor.stop_monitoring()
         #     log.info("Keyboard monitoring stopped")
@@ -157,12 +159,11 @@ class DAMXDaemon:
     
         log.info("Daemon stopped")
 
-    def signal_handler(self, sig, frame):
+    def signal_handler(self, sig):
         """Handle termination signals"""
         log.info(f"Received signal {sig}, shutting down...")
         self.running = False
-        if self.server:
-            self.server.running = False
+        self.stop.set()
 
 def parse_args():
     """Parse command line arguments"""
