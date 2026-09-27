@@ -19,6 +19,7 @@ DESKTOP_FILE_DIR="/usr/share/applications"
 ICON_DIR="/usr/share/icons/hicolor/256x256/apps"
 DBUS_NAME="io.github.PXDiv.DAMX"
 DBUS_POLICY_DIR="/usr/share/dbus-1/system.d"
+DBUS_SERVICE_DIR="/usr/share/dbus-1/system-services"
 POLKIT_ACTION_DIR="/usr/share/polkit-1/actions"
 MODULE_SIGNING_DIR="/var/lib/damx/secureboot"
 MODULE_SIGNING_KEY="${MODULE_SIGNING_DIR}/DAMX-MOK.priv"
@@ -180,6 +181,7 @@ comprehensive_cleanup() {
   rm -f ${DAEMON_BIN}
   rm -f ${DAEMON_UNIT_DIR}/${DAEMON_SERVICE_NAME}
   rm -f ${DBUS_POLICY_DIR}/${DBUS_NAME}.conf
+  rm -f ${DBUS_SERVICE_DIR}/${DBUS_NAME}.service
   rm -f ${POLKIT_ACTION_DIR}/${DBUS_NAME}.policy
   # Logs written before the daemon moved to the journal
   rm -f /var/log/DAMX_Daemon_Log.log /var/log/DAMX_Daemon_Log.log.[0-9]
@@ -581,6 +583,8 @@ install_daemon() {
   # and have the bus pick up the new policy
   install -Dm644 DAMX-Daemon/${DBUS_NAME}.conf ${DBUS_POLICY_DIR}/${DBUS_NAME}.conf
   install -Dm644 DAMX-Daemon/${DBUS_NAME}.policy ${POLKIT_ACTION_DIR}/${DBUS_NAME}.policy
+  # Lets the bus start the daemon when the GUI calls it
+  install -Dm644 DAMX-Daemon/${DBUS_NAME}.service ${DBUS_SERVICE_DIR}/${DBUS_NAME}.service
   busctl call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig
 
   install -Dm644 DAMX-Daemon/${DAEMON_SERVICE_NAME} ${DAEMON_UNIT_DIR}/${DAEMON_SERVICE_NAME}

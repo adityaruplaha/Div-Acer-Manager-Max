@@ -1,0 +1,6 @@
+# Lets the bus start the daemon through systemd when a client calls it
+[D-BUS Service]
+Name=io.github.PXDiv.DAMX
+Exec=/bin/false
+User=root
+SystemdService=damx-daemon.service
