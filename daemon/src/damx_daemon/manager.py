@@ -5,7 +5,6 @@ import fcntl
 import glob
 import os
 import subprocess
-import sys
 import time
 from typing import Dict, List, Set, Tuple
 
@@ -19,11 +18,8 @@ from .logs import log
 class DAMXManager:
     """Manages all the DAMX-Daemon features"""
 
-    MAX_RESTART_ATTEMPTS = 20
-    # Kept in /run, which only root can write and which is cleared at boot,
-    # rather than in world-writable /tmp
-    RESTART_COUNTER_DIR = "/run/damx"
-    RESTART_COUNTER_FILE = os.path.join(RESTART_COUNTER_DIR, "restart_attempts")
+    # How long to wait for the driver to register its settings at startup
+    DRIVER_SETTLE_TIMEOUT = 5
 
     def __init__(self):
         """Detect the driver, the laptop type and the available features"""
@@ -36,38 +32,18 @@ class DAMXManager:
         else:
             log.info(f"acer-wmi device found, driven by the {self.driver_module} module. Proceeding with initialization.")
         
-        self.laptop_type = self._detect_laptop_type()
+        self.laptop_type = self._wait_for_laptop_type()
         # self.keyboard_monitor = None
 
-        #added a delay so that driver sets up properly first
-        time.sleep(0.2)
+        if self.laptop_type == LaptopType.UNKNOWN and self.driver_module == DEFAULT_DRIVER_MODULE:
+            # linuwu_sense can come up before its settings are ready, and
+            # reloading it once helps; other modules gain nothing from it.
+            log.warning(f"Unknown laptop type detected, reloading {self.driver_module} once...")
+            if self._reload_driver():
+                self.laptop_type = self._wait_for_laptop_type()
+            if self.laptop_type == LaptopType.UNKNOWN:
+                log.error("Laptop type still unknown, continuing with limited functionality")
 
-        # If unknown laptop type detected, try restarting drivers (with limit)
-        if self.laptop_type == LaptopType.UNKNOWN:
-            current_attempts = self._get_restart_attempts()
-            
-            if self.driver_module != DEFAULT_DRIVER_MODULE:
-                # Restarting helps linuwu_sense, which can come up before its
-                # settings are ready; other modules gain nothing from it.
-                log.info(f"Not restarting {self.driver_module}, continuing with limited functionality")
-            elif current_attempts < self.MAX_RESTART_ATTEMPTS:
-                attempts = self._increment_restart_attempts()
-                log.warning(f"Unknown laptop type detected, attempting driver restart (attempt {attempts}/{self.MAX_RESTART_ATTEMPTS})...")
-                
-                if self._restart_drivers_and_daemon():
-                    # There is no command to answer at startup, so restart straight away
-                    log.info("Driver restart initiated, daemon will restart automatically")
-                    subprocess.run(['systemctl', 'restart', '--no-block', 'damx-daemon.service'])
-                    sys.exit(0)
-                else:
-                    log.error(f"Failed to restart drivers (attempt {attempts}), continuing with limited functionality")
-            else:
-                log.error(f"Maximum restart attempts ({self.MAX_RESTART_ATTEMPTS}) reached, giving up on driver restart")
-                log.info("Continuing with unknown laptop type and limited functionality")
-        else:
-            # Reset counter on successful detection
-            self._reset_restart_attempts()
-        
         self.base_path = self._get_base_path()
         self.has_four_zone_kb = self._check_four_zone_kb()
         self.enek5130_hid_device = self._find_enek5130_hid_device()
@@ -92,127 +68,64 @@ class DAMXManager:
         # does once it has answered them
         self.restart_requested = False
 
-    def _get_restart_attempts(self) -> int:
-        """Get current restart attempt count"""
-        try:
-            if os.path.exists(self.RESTART_COUNTER_FILE):
-                with open(self.RESTART_COUNTER_FILE, 'r') as f:
-                    return int(f.read().strip())
-        except (ValueError, IOError):
-            pass
-        return 0
+    def _wait_for_laptop_type(self) -> LaptopType:
+        """Detect the laptop type, giving a driver that is still starting time to register its settings
 
-    def _increment_restart_attempts(self) -> int:
-        """Increment and return restart attempt count"""
-        attempts = self._get_restart_attempts() + 1
-        try:
-            os.makedirs(self.RESTART_COUNTER_DIR, mode=0o700, exist_ok=True)
-            with open(self.RESTART_COUNTER_FILE, 'w') as f:
-                f.write(str(attempts))
-        except IOError as e:
-            log.error(f"Failed to write restart counter: {e}")
-        return attempts
+        Only waits while the acer-wmi device is missing, or for linuwu_sense,
+        whose settings can appear after its device does; for other modules an
+        unknown type is final.
+        """
+        deadline = time.monotonic() + self.DRIVER_SETTLE_TIMEOUT
+        while True:
+            laptop_type = self._detect_laptop_type()
+            if laptop_type != LaptopType.UNKNOWN:
+                return laptop_type
+            device_present = os.path.exists(paths.ACER_WMI_DEVICE_PATH)
+            if device_present and detect_driver_module() != DEFAULT_DRIVER_MODULE:
+                return laptop_type
+            if time.monotonic() >= deadline:
+                return laptop_type
+            time.sleep(0.1)
 
-    def _reset_restart_attempts(self):
-        """Reset restart attempt counter"""
+    def _reload_driver(self, *params: str) -> bool:
+        """Unload the driver module and load it again with params, then wait for its device"""
         try:
-            if os.path.exists(self.RESTART_COUNTER_FILE):
-                os.unlink(self.RESTART_COUNTER_FILE)
-        except IOError as e:
-            log.error(f"Failed to reset restart counter: {e}")
+            subprocess.run(['rmmod', self.driver_module], check=True)
+            log.info(f"Successfully removed {self.driver_module} module")
+            subprocess.run(['modprobe', self.driver_module, *params], check=True)
+            log.info(f"Successfully reloaded {self.driver_module} module {' '.join(params)}".rstrip())
+        except (OSError, subprocess.CalledProcessError) as e:
+            log.error(f"Failed to reload {self.driver_module}: {e}")
+            return False
+
+        deadline = time.monotonic() + self.DRIVER_SETTLE_TIMEOUT
+        while not os.path.exists(paths.ACER_WMI_DEVICE_PATH):
+            if time.monotonic() >= deadline:
+                log.error(f"{self.driver_module} did not register the acer-wmi device")
+                return False
+            time.sleep(0.1)
+        return True
 
     def _force_model_nitro(self):
-        """Restart the driver module and DAMX daemon service with nitro_v4 parameter"""
+        """Reload the driver with nitro_v4 and restart the daemon"""
         log.info("Forcing model detection to Nitro by restarting drivers and daemon")
-
-        try:
-            # Remove the module
-            subprocess.run(['rmmod', self.driver_module], check=True)
-            log.info(f"Successfully removed {self.driver_module} module")
-            
-            # Wait a moment
-            time.sleep(2)
-            
-            # Reload the module
-            subprocess.run(['modprobe', self.driver_module, 'nitro_v4'], check=True)
-            log.info(f"Successfully reloaded {self.driver_module} module")
-            
-            # Wait a moment for module to initialize
-            time.sleep(3)
-            
-            # Restart the daemon service
-            log.info("Restarting DAMX daemon service once the command is answered")
-            self.restart_requested = True
-            
-            return True
-        
-        except Exception as e:
-            log.error(f"Unexpected error while Forcing Nitro Model: {e}")
-            return False
-        
+        return self._reload_driver('nitro_v4') and self._restart_daemon()
 
     def _force_model_predator(self):
-        """Restart the driver module and DAMX daemon service with predator_v4 parameter"""
+        """Reload the driver with predator_v4 and restart the daemon"""
         log.info("Forcing model detection to Predator by restarting drivers and daemon")
-
-        try:
-            # Remove the module
-            subprocess.run(['rmmod', self.driver_module], check=True)
-            log.info(f"Successfully removed {self.driver_module} module")
-            
-            # Wait a moment
-            time.sleep(2)
-            
-            # Reload the module
-            subprocess.run(['modprobe', self.driver_module, 'predator_v4'], check=True)
-            log.info(f"Successfully reloaded {self.driver_module} module")
-
-            # Wait a moment for module to initialize
-            time.sleep(3)
-
-            # Restart the daemon service
-            log.info("Restarting DAMX daemon service once the command is answered")
-            self.restart_requested = True
-
-            return True
-
-        except Exception as e:
-            log.error(f"Unexpected error while Forcing Predator Model: {e}")
-            return False
+        return self._reload_driver('predator_v4') and self._restart_daemon()
 
     def _force_enable_all(self):
-        """Restart the driver module and DAMX daemon service with enable_all parameter"""
+        """Reload the driver with enable_all and restart the daemon"""
         log.info("Forcing all features by restarting daemon and drivers with parameter enable_all")
 
         if self.driver_module != "linuwu_sense":
             log.error(f"enable_all is a linuwu_sense parameter; {self.driver_module} does not support it")
             return False
 
-        try:
-            # Remove the module
-            subprocess.run(['rmmod', self.driver_module], check=True)
-            log.info(f"Successfully removed {self.driver_module} module")
-            
-            # Wait a moment
-            time.sleep(2)
-            
-            # Reload the module
-            subprocess.run(['modprobe', self.driver_module, 'enable_all'], check=True)
-            log.info(f"Successfully reloaded {self.driver_module} module with enable_all parameter")
-            
-            # Wait a moment for module to initialize
-            time.sleep(3)
-            
-            # Restart the daemon service
-            log.info("Restarting DAMX daemon service once the command is answered")
-            self.restart_requested = True
-            
-            return True
-        
-        except Exception as e:
-            log.error(f"Unexpected error while Forcing All Features: {e}")
-            return False
-        
+        return self._reload_driver('enable_all') and self._restart_daemon()
+
     def _detect_current_modprobe_param(self) -> str:
         """Detect which modprobe parameter is currently set"""
         try:
@@ -336,52 +249,20 @@ class DAMXManager:
             return False
         
     def _restart_daemon(self):
-        """Restart DAMX daemon service alone"""
-        attempts = self._get_restart_attempts()
-        log.info("Attempting to restart daemon")
-        
-        try:
-            # Restart the daemon service
-            log.info("Restarting DAMX daemon service once the command is answered")
-            self.restart_requested = True
-            
-            return True
-            
-        except Exception as e:
-            log.error(f"Unexpected error during restart (attempt {attempts}): {e}")
-            return False
-            
+        """Ask for the daemon to be restarted once it has answered the command that asked for it
+
+        Restarting straight away would stop the daemon, and anything it ran,
+        before it could answer.
+        """
+        log.info("Restarting DAMX daemon service once the command is answered")
+        self.restart_requested = True
+        return True
 
     def _restart_drivers_and_daemon(self):
-        """Restart the driver module and DAMX daemon service"""
-        attempts = self._get_restart_attempts()
-        log.info(f"Attempting to restart drivers and daemon (attempt {attempts}/{self.MAX_RESTART_ATTEMPTS})...")
-        
-        try:
-            # Remove the module
-            subprocess.run(['rmmod', self.driver_module], check=True)
-            log.info(f"Successfully removed {self.driver_module} module")
-            
-            # Wait a moment
-            time.sleep(2)
-            
-            # Reload the module
-            subprocess.run(['modprobe', self.driver_module], check=True)
-            log.info(f"Successfully reloaded {self.driver_module} module")
-            
-            # Wait a moment for module to initialize
-            time.sleep(3)
-            
-            # Restart the daemon service
-            log.info("Restarting DAMX daemon service once the command is answered")
-            self.restart_requested = True
-            
-            return True
-            
-        except Exception as e:
-            log.error(f"Unexpected error during restart (attempt {attempts}): {e}")
-            return False
-            
+        """Reload the driver module and restart the daemon"""
+        log.info("Restarting drivers and daemon...")
+        return self._reload_driver() and self._restart_daemon()
+
     def _detect_laptop_type(self) -> LaptopType:
         """Detect whether this is a Predator or Nitro laptop"""
         predator_path = os.path.join(paths.ACER_WMI_DEVICE_PATH, "predator_sense")
