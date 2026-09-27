@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['DAMX-Daemon.py'],
+    ['damx_daemon.py'],
     pathex=[],
     binaries=[],
     datas=[],
