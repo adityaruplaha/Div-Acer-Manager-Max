@@ -97,3 +97,9 @@ def test_modprobe_parameter_names_the_driving_module(manager):
 def test_enable_all_is_refused_for_acer_wmi(manager):
     assert not manager.set_modprobe_parameter("enable_all")
     assert not os.path.exists(paths.MODPROBE_CONFIG_PATH)
+
+
+def test_the_daemon_restart_waits_for_the_answer(manager):
+    # no_subprocesses fails the test if systemctl is run here
+    assert manager._restart_daemon()
+    assert manager.restart_requested

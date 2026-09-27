@@ -55,8 +55,9 @@ class DAMXManager:
                 log.warning(f"Unknown laptop type detected, attempting driver restart (attempt {attempts}/{self.MAX_RESTART_ATTEMPTS})...")
                 
                 if self._restart_drivers_and_daemon():
-                    # The daemon will restart itself, so we should exit this instance
+                    # There is no command to answer at startup, so restart straight away
                     log.info("Driver restart initiated, daemon will restart automatically")
+                    subprocess.run(['systemctl', 'restart', '--no-block', 'damx-daemon.service'])
                     sys.exit(0)
                 else:
                     log.error(f"Failed to restart drivers (attempt {attempts}), continuing with limited functionality")
@@ -87,6 +88,9 @@ class DAMXManager:
             raise FileNotFoundError(f"Base path does not exist: {self.base_path}")
         
         self.power_monitor = None
+        # Set by commands that restart the daemon, which the D-Bus service
+        # does once it has answered them
+        self.restart_requested = False
 
     def _get_restart_attempts(self) -> int:
         """Get current restart attempt count"""
@@ -137,8 +141,8 @@ class DAMXManager:
             time.sleep(3)
             
             # Restart the daemon service
-            log.info("Restarting DAMX daemon service (may produce an error)")
-            subprocess.run(['systemctl', 'restart', 'damx-daemon.service'], check=True)
+            log.info("Restarting DAMX daemon service once the command is answered")
+            self.restart_requested = True
             
             return True
         
@@ -167,8 +171,8 @@ class DAMXManager:
             time.sleep(3)
 
             # Restart the daemon service
-            log.info("Restarting DAMX daemon service (may produce an error)")
-            subprocess.run(['systemctl', 'restart', 'damx-daemon.service'], check=True)
+            log.info("Restarting DAMX daemon service once the command is answered")
+            self.restart_requested = True
 
             return True
 
@@ -200,8 +204,8 @@ class DAMXManager:
             time.sleep(3)
             
             # Restart the daemon service
-            log.info("Restarting DAMX daemon service (may produce an error)")
-            subprocess.run(['systemctl', 'restart', 'damx-daemon.service'], check=True)
+            log.info("Restarting DAMX daemon service once the command is answered")
+            self.restart_requested = True
             
             return True
         
@@ -338,8 +342,8 @@ class DAMXManager:
         
         try:
             # Restart the daemon service
-            log.info("Restarting DAMX daemon service (may produce an error)")
-            subprocess.run(['systemctl', 'restart', 'damx-daemon.service'], check=True)
+            log.info("Restarting DAMX daemon service once the command is answered")
+            self.restart_requested = True
             
             return True
             
@@ -369,8 +373,8 @@ class DAMXManager:
             time.sleep(3)
             
             # Restart the daemon service
-            log.info("Restarting DAMX daemon service (may produce an error)")
-            subprocess.run(['systemctl', 'restart', 'damx-daemon.service'], check=True)
+            log.info("Restarting DAMX daemon service once the command is answered")
+            self.restart_requested = True
             
             return True
             

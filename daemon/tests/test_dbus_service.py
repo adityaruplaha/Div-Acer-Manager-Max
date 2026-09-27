@@ -57,7 +57,31 @@ def bus_address():
     daemon.wait()
 
 
-async def serve_and_call(bus_address, allowed, calls):
+class FakeSystemd(ServiceInterface):
+    """Records the units it is asked to restart"""
+
+    def __init__(self):
+        super().__init__("org.freedesktop.systemd1.Manager")
+        self.restarted = []
+
+    @method()
+    def RestartUnit(self, name: "s", mode: "s") -> "o":
+        self.restarted.append((name, mode))
+        return "/org/freedesktop/systemd1/job/1"
+
+
+class RestartingManager:
+    """Asks for a restart, as the real manager's restart commands do"""
+
+    available_features = set()
+    restart_requested = False
+
+    def _restart_daemon(self):
+        self.restart_requested = True
+        return True
+
+
+async def serve_and_call(bus_address, allowed, calls, manager=None):
     """Start the service and a fake authority, then run Execute for each (command, params)"""
     authority_bus = await MessageBus(bus_address=bus_address).connect()
     authority = FakeAuthority(allowed)
@@ -65,7 +89,7 @@ async def serve_and_call(bus_address, allowed, calls):
     await authority_bus.request_name("org.freedesktop.PolicyKit1")
 
     stop = asyncio.Event()
-    service = DBusService(CommandProcessor(NoFeatures()), bus_address=bus_address)
+    service = DBusService(CommandProcessor(manager or NoFeatures()), bus_address=bus_address)
     serving = asyncio.create_task(service.run(stop))
 
     client = await MessageBus(bus_address=bus_address).connect()
@@ -137,3 +161,22 @@ def test_no_reply_is_sent_once_the_bus_is_closed(bus_address):
         service._reply(Message(destination=BUS_NAME, path=OBJECT_PATH, member="Execute", serial=1), {"success": True})
 
     run(scenario())
+
+
+def test_restart_is_asked_of_systemd_after_the_answer(bus_address):
+    async def scenario():
+        systemd_bus = await MessageBus(bus_address=bus_address).connect()
+        systemd = FakeSystemd()
+        systemd_bus.export("/org/freedesktop/systemd1", systemd)
+        await systemd_bus.request_name("org.freedesktop.systemd1")
+
+        manager = RestartingManager()
+        replies, _, _ = await serve_and_call(bus_address, {ACTION_MANAGE_DRIVER}, [("restart_daemon", {})], manager)
+        await asyncio.sleep(0.1)
+        systemd_bus.disconnect()
+        return replies, systemd.restarted, manager.restart_requested
+
+    replies, restarted, still_requested = run(scenario())
+    assert json.loads(replies[0].body[0])["success"] is True
+    assert restarted == [("damx-daemon.service", "replace")]
+    assert not still_requested

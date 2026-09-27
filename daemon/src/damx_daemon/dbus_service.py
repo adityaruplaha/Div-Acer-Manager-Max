@@ -20,6 +20,8 @@ BUS_NAME = "io.github.PXDiv.DAMX"
 OBJECT_PATH = "/io/github/PXDiv/DAMX"
 INTERFACE = "io.github.PXDiv.DAMX"
 ERROR_NOT_AUTHORIZED = "io.github.PXDiv.DAMX.Error.NotAuthorized"
+# The daemon's own unit, which systemd restarts when a command asks for it
+SERVICE_UNIT = "damx-daemon.service"
 
 # polkit actions, defined in io.github.PXDiv.DAMX.policy
 ACTION_CHANGE_SETTINGS = "io.github.PXDiv.DAMX.change-settings"
@@ -126,6 +128,30 @@ class DBusService:
         response = await asyncio.get_running_loop().run_in_executor(
             None, self.processor.process_command, command, params)
         self._reply(msg, response)
+
+        manager = getattr(self.processor, "manager", None)
+        if getattr(manager, "restart_requested", False):
+            manager.restart_requested = False
+            self._restart_service()
+
+    def _restart_service(self):
+        """Ask systemd to restart the daemon
+
+        Sent on the same connection as the reply before it, so that the
+        caller has its answer before systemd stops the daemon.
+        """
+        if not self.bus.connected:
+            return
+        log.info(f"Asking systemd to restart {SERVICE_UNIT}")
+        self.bus.send(Message(
+            destination="org.freedesktop.systemd1",
+            path="/org/freedesktop/systemd1",
+            interface="org.freedesktop.systemd1.Manager",
+            member="RestartUnit",
+            signature="ss",
+            body=[SERVICE_UNIT, "replace"],
+            flags=MessageFlag.NO_REPLY_EXPECTED,
+        ))
 
     def _reply(self, msg: Message, response: dict):
         # A command that stops the daemon can finish after the bus is closed
