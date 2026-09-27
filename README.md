@@ -44,7 +44,7 @@
 * 🧠 **Smart Daemon (Low Resource Use)**
 
   * Auto-detects feature support per device
-  * Communicates with GUI in real-time
+  * Talks to the GUI over the D-Bus system bus, and asks polkit before changing anything
   * Lightweight: uses \~10MB RAM
   * Can run **independently** of GUI
   * Recursive restart to fix software issues similar to those on Windows
@@ -93,6 +93,16 @@ Check your device's compatibility here: [Compatibility List](https://github.com/
 6. Reboot your system after the installation completes.
 
 ✅ That’s it—you’re all set!
+
+## 🔐 Permissions
+
+The GUI runs as you and sends its commands to the daemon, which runs as root, over the D-Bus system bus. The daemon asks polkit whether you may run each one:
+
+* Reading settings needs no permission.
+* Changing settings (fans, thermal profile, keyboard, battery and so on) is allowed without a password for the user sitting at the laptop, as with power profiles, and needs an administrator's password otherwise.
+* Reloading the driver, changing its options or restarting the daemon always asks for an administrator's password, which is remembered for a few minutes.
+
+These rules are the defaults in `io.github.PXDiv.DAMX.policy`, and can be changed with polkit rules like any other system service's.
 
 ## 🔘 Nitro / PredatorSense Button
 
