@@ -8,11 +8,13 @@ import sys
 import json
 import time
 import argparse
+import codecs
 import ctypes
 import fcntl
 import glob
 import logging
 import logging.handlers
+import select
 import socket
 import threading
 import signal
@@ -1051,6 +1053,12 @@ class DAMXManager:
 class DaemonServer:
     """Unix Socket server for IPC with the GUI client"""
 
+    # Limits on what a client can make the daemon hold
+    MAX_CLIENTS = 16
+    MAX_REQUEST_SIZE = 64 * 1024
+    # How long to wait for the rest of a request split across several reads
+    CONTINUATION_TIMEOUT = 0.1
+
     def __init__(self, manager: DAMXManager):
         self.manager = manager
         self.socket = None
@@ -1082,6 +1090,14 @@ class DaemonServer:
             while self.running:
                 try:
                     client, _ = self.socket.accept()
+
+                    # Forget clients whose connections have closed
+                    self.clients = [(c, t) for c, t in self.clients if t.is_alive()]
+                    if len(self.clients) >= self.MAX_CLIENTS:
+                        log.warning(f"Refusing connection: {self.MAX_CLIENTS} clients already connected")
+                        client.close()
+                        continue
+
                     client_thread = threading.Thread(target=self.handle_client, args=(client,))
                     client_thread.daemon = True
                     client_thread.start()
@@ -1131,40 +1147,65 @@ class DaemonServer:
             log.error(f"Failed to remove socket file: {e}")
 
 
+    def _more_data_pending(self, client_socket) -> bool:
+        """Whether more of a request arrives within CONTINUATION_TIMEOUT"""
+        readable, _, _ = select.select([client_socket], [], [], self.CONTINUATION_TIMEOUT)
+        return bool(readable)
+
+    @staticmethod
+    def _send(client_socket, response: Dict):
+        client_socket.sendall(json.dumps(response).encode('utf-8'))
+
     def handle_client(self, client_socket):
-        """Handle communication with a client"""
+        """Handle communication with a client
+
+        Requests are JSON objects with no delimiter between them. A request
+        may arrive split across several reads, so data is buffered until a
+        complete object decodes, up to MAX_REQUEST_SIZE.
+        """
+        decoder = json.JSONDecoder()
+        utf8 = codecs.getincrementaldecoder('utf-8')()
+        buffer = ""
         try:
             while self.running:
-                # Receive data from client
                 data = client_socket.recv(4096)
                 if not data:
                     break
 
                 try:
-                    # Parse JSON request
-                    request = json.loads(data.decode('utf-8'))
-                    command = request.get("command", "")
-                    params = request.get("params", {})
+                    buffer += utf8.decode(data)
+                except UnicodeDecodeError:
+                    log.error("Invalid UTF-8 received")
+                    self._send(client_socket, {"success": False, "error": "Invalid JSON format"})
+                    utf8.reset()
+                    buffer = ""
+                    continue
 
-                    # Process command
-                    response = self.process_command(command, params)
+                while buffer.strip():
+                    buffer = buffer.lstrip()
+                    try:
+                        request, end = decoder.raw_decode(buffer)
+                    except json.JSONDecodeError:
+                        if len(buffer) < self.MAX_REQUEST_SIZE and self._more_data_pending(client_socket):
+                            break  # the rest of the request is still arriving
+                        log.error("Invalid JSON received")
+                        self._send(client_socket, {"success": False, "error": "Invalid JSON format"})
+                        buffer = ""
+                        break
+                    buffer = buffer[end:]
 
-                    # Send response
-                    client_socket.sendall(json.dumps(response).encode('utf-8'))
+                    if not isinstance(request, dict):
+                        self._send(client_socket, {"success": False, "error": "Request must be a JSON object"})
+                        continue
 
-                except json.JSONDecodeError:
-                    log.error("Invalid JSON received")
-                    client_socket.sendall(json.dumps({
-                        "success": False,
-                        "error": "Invalid JSON format"
-                    }).encode('utf-8'))
-                except Exception as e:
-                    log.error(f"Error processing request: {e}")
-                    log.error(traceback.format_exc())
-                    client_socket.sendall(json.dumps({
-                        "success": False,
-                        "error": str(e)
-                    }).encode('utf-8'))
+                    try:
+                        command = request.get("command", "")
+                        params = request.get("params") or {}
+                        self._send(client_socket, self.process_command(command, params))
+                    except Exception as e:
+                        log.error(f"Error processing request: {e}")
+                        log.error(traceback.format_exc())
+                        self._send(client_socket, {"success": False, "error": str(e)})
 
         except Exception as e:
             if self.running:  # Only log if not shutting down
@@ -1172,15 +1213,19 @@ class DaemonServer:
         finally:
             try:
                 client_socket.close()
-            except:
+            except OSError:
                 pass
 
     def process_command(self, command: str, params: Dict) -> Dict:
         """Process a command from the client"""
-        log.info(f"Processing command: {command} with params: {params}")
+        log.debug(f"Processing command: {command} with params: {params}")
 
         try:
-            if command == "get_all_settings":
+            if command == "ping":
+                # Used by the GUI to check that its connection is alive
+                return {"success": True}
+
+            elif command == "get_all_settings":
                 settings = self.manager.get_all_settings()
                 return {
                     "success": True,
