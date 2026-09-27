@@ -1,18 +1,37 @@
-
-DivAcerManagerMax/obj/
-
-DivAcerManagerMax/bin/Release/net9.0/linux-x64/
-
-DivAcerManagerMax/bin/Debug/net9.0/
-
+# DAMX packaging output
 Publish/
-
 publish/
-
 buildPublish/
 
-DAMM-Daemon/build/
+# Python, from github/gitignore Python.gitignore. *.spec and *.manifest are
+# left out: DAMM-Daemon/DAMX-Daemon.spec and DivAcerManagerMax/app.manifest
+# are tracked on purpose.
+__pycache__/
+*.py[codz]
+build/
+dist/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 
-DAMM-Daemon/dist/
+# .NET, from github/gitignore Dotnet.gitignore
+[Bb]in/
+[Oo]bj/
+artifacts/
+*.nupkg
+*.snupkg
+*.binlog
 
-DAMM-Daemon/__pycache__/
+# IDE project settings, kept per developer
+.idea/
+.vscode/
+*.iws
+
+# Linux and editors, from github/gitignore Global/Linux.gitignore
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
