@@ -32,8 +32,22 @@ class DAMXDaemon:
         # --verbose/--debug force debug logging over the configured level
         self.verbose = verbose
 
+    @staticmethod
+    def migrate_legacy_config():
+        """Move the config from where earlier versions kept it, if it is only there"""
+        if os.path.exists(paths.CONFIG_PATH) or not os.path.exists(paths.LEGACY_CONFIG_PATH):
+            return
+        os.makedirs(os.path.dirname(paths.CONFIG_PATH), exist_ok=True)
+        os.replace(paths.LEGACY_CONFIG_PATH, paths.CONFIG_PATH)
+        log.info(f"Moved {paths.LEGACY_CONFIG_PATH} to {paths.CONFIG_PATH}")
+        try:
+            os.rmdir(os.path.dirname(paths.LEGACY_CONFIG_PATH))
+        except OSError as e:
+            log.warning(f"Left {os.path.dirname(paths.LEGACY_CONFIG_PATH)} in place: {e}")
+
     def load_config(self):
         """Load configuration from file"""
+        self.migrate_legacy_config()
         config = configparser.ConfigParser()
 
         # Create default config if it doesn't exist
@@ -106,10 +120,6 @@ class DAMXDaemon:
 
     def run(self):
         """Run the daemon"""
-        # Write PID file
-        with open(paths.PID_FILE, 'w') as f:
-            f.write(str(os.getpid()))
-
         # if self.keyboard_monitor:
         #     success = self.keyboard_monitor.start_monitoring()
         #     if success:
@@ -145,13 +155,6 @@ class DAMXDaemon:
         # if hasattr(self, 'keyboard_monitor') and self.keyboard_monitor:
         #     self.keyboard_monitor.stop_monitoring()
         #     log.info("Keyboard monitoring stopped")
-    
-        # Remove PID file
-        try:
-            if os.path.exists(paths.PID_FILE):
-                os.unlink(paths.PID_FILE)
-        except OSError:
-            pass
     
         log.info("Daemon stopped")
 

@@ -51,7 +51,8 @@ def fake_system(tmp_path, monkeypatch):
     monkeypatch.setattr(paths, "PLATFORM_PROFILE_CHOICES_PATH", str(acpi / "platform_profile_choices"))
     monkeypatch.setattr(paths, "POWER_SUPPLY_DIR", str(root / "sys/class/power_supply"))
     monkeypatch.setattr(paths, "MODPROBE_CONFIG_PATH", str(root / "etc/modprobe.d/linuwu-sense.conf"))
-    monkeypatch.setattr(paths, "CONFIG_PATH", str(root / "etc/DAMX_Daemon/config.ini"))
+    monkeypatch.setattr(paths, "CONFIG_PATH", str(root / "etc/damx/config.ini"))
+    monkeypatch.setattr(paths, "LEGACY_CONFIG_PATH", str(root / "etc/DAMX_Daemon/config.ini"))
     return root
 
 
