@@ -16,12 +16,11 @@ jobs:
         with:
           src: daemon
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
+      - uses: astral-sh/setup-uv@v6
 
-      - name: Compile
-        run: python -m compileall -q daemon
+      - name: Test
+        working-directory: daemon
+        run: uv run --no-project --with pytest pytest
 
   gui:
     runs-on: ubuntu-latest

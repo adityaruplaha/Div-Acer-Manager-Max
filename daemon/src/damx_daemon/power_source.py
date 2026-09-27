@@ -7,6 +7,8 @@ import subprocess
 from threading import Timer
 from typing import Optional
 
+from . import paths
+
 # Get logger from main daemon
 log = logging.getLogger("DAMXDaemon")
 
@@ -22,10 +24,8 @@ class PowerSourceDetector:
         log.info("PowerSourceDetector initialized")
         
         self.possible_power_supply_paths = [
-            "/sys/class/power_supply/AC/online",
-            "/sys/class/power_supply/ACAD/online",
-            "/sys/class/power_supply/ADP1/online",
-            "/sys/class/power_supply/AC0/online"
+            os.path.join(paths.POWER_SUPPLY_DIR, name, "online")
+            for name in ("AC", "ACAD", "ADP1", "AC0")
         ]
 
     def start_monitoring(self):
@@ -58,7 +58,7 @@ class PowerSourceDetector:
 
         try:
             # Discover AC adapters by their sysfs type rather than their name.
-            for entry in os.scandir("/sys/class/power_supply"):
+            for entry in os.scandir(paths.POWER_SUPPLY_DIR):
                 try:
                     supply_type = self._read_status(os.path.join(entry.path, "type"))
                     if supply_type != "Mains":
