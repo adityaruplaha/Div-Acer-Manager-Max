@@ -2,10 +2,7 @@
 
 import asyncio
 import json
-import shutil
-import subprocess
 
-import pytest
 from dbus_fast import Message, MessageFlag, MessageType
 from dbus_fast.aio import MessageBus
 from dbus_fast.service import ServiceInterface, method
@@ -22,8 +19,6 @@ from damx_daemon.dbus_service import (
     DBusService,
     required_action,
 )
-
-pytestmark = pytest.mark.skipif(shutil.which("dbus-daemon") is None, reason="needs dbus-daemon")
 
 
 class NoFeatures:
@@ -44,17 +39,6 @@ class FakeAuthority(ServiceInterface):
         kind, subject_details = subject
         self.checks.append((kind, subject_details["name"].value, action_id, flags))
         return [action_id in self.allowed, False, {}]
-
-
-@pytest.fixture
-def bus_address():
-    daemon = subprocess.Popen(
-        ["dbus-daemon", "--session", "--nofork", "--print-address"],
-        stdout=subprocess.PIPE, text=True)
-    address = daemon.stdout.readline().strip()
-    yield address
-    daemon.terminate()
-    daemon.wait()
 
 
 class FakeSystemd(ServiceInterface):

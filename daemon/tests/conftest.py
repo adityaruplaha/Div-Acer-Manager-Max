@@ -1,6 +1,8 @@
 """Fixtures that point the daemon at a fake sysfs tree"""
 
 import os
+import shutil
+import subprocess
 
 import pytest
 
@@ -62,3 +64,17 @@ def no_subprocesses(monkeypatch):
         raise AssertionError(f"unexpected subprocess: {args}")
 
     monkeypatch.setattr(subprocess, "run", refuse)
+
+
+@pytest.fixture
+def bus_address():
+    """A private message bus, standing in for the system bus"""
+    if shutil.which("dbus-daemon") is None:
+        pytest.skip("needs dbus-daemon")
+    daemon = subprocess.Popen(
+        ["dbus-daemon", "--session", "--nofork", "--print-address"],
+        stdout=subprocess.PIPE, text=True)
+    address = daemon.stdout.readline().strip()
+    yield address
+    daemon.terminate()
+    daemon.wait()

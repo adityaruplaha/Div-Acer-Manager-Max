@@ -1,51 +1,88 @@
-#!/usr/bin/env python3
-# DAMX Power Source Detection - Monitors power source and adjusts thermal profiles accordingly
+"""Detection of the power source, and the thermal profile limits on battery
 
+The source is read from sysfs. UPower's OnBattery property, which changes
+when an adapter is plugged in or out, says when to read it again, so that
+the daemon need not poll; without UPower it falls back to polling.
+"""
+
+import asyncio
 import glob
-import logging
 import os
 import subprocess
-from threading import Timer
+import threading
+
+from dbus_fast import BusType
+from dbus_fast.aio import MessageBus
 
 from . import paths
+from .logs import log
 
-# Get logger from main daemon
-log = logging.getLogger("DAMXDaemon")
+UPOWER_NAME = "org.freedesktop.UPower"
+UPOWER_PATH = "/org/freedesktop/UPower"
+
 
 class PowerSourceDetector:
     """Detects power source and manages automatic mode switching"""
 
+    # Seconds between checks when UPower is not available
+    POLL_INTERVAL = 5
+
     def __init__(self, manager):
         self.manager = manager
         self.current_source = None
-        self.check_interval = 5  # seconds
-        self.timer = None
-        
-        log.info("PowerSourceDetector initialized")
+        self.bus = None
+        self._lock = threading.Lock()
 
-    def start_monitoring(self):
-        """Start periodic power source checking"""
-        self.check_power_source()
-        log.info("Monitoring power source started")
+    async def run(self, stop: asyncio.Event, bus_type: BusType = BusType.SYSTEM, bus_address: str = None):
+        """Check the power source now and whenever it may have changed, until stop is set"""
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self.check_power_source)
 
-    def stop_monitoring(self):
-        """Stop periodic power source checking"""
-        if self.timer:
-            self.timer.cancel()
+        try:
+            if await self._watch_upower(bus_type, bus_address):
+                log.info("Watching UPower for power source changes")
+                await stop.wait()
+                return
+
+            log.info(f"UPower is not available, checking the power source every {self.POLL_INTERVAL} seconds")
+            while not stop.is_set():
+                try:
+                    await asyncio.wait_for(stop.wait(), self.POLL_INTERVAL)
+                except TimeoutError:
+                    await loop.run_in_executor(None, self.check_power_source)
+        finally:
+            if self.bus:
+                self.bus.disconnect()
+                self.bus = None
+
+    async def _watch_upower(self, bus_type: BusType, bus_address: str) -> bool:
+        """Subscribe to changes of UPower's OnBattery, returning whether that worked"""
+        try:
+            self.bus = await MessageBus(bus_type=bus_type, bus_address=bus_address).connect()
+            introspection = await self.bus.introspect(UPOWER_NAME, UPOWER_PATH)
+            proxy = self.bus.get_proxy_object(UPOWER_NAME, UPOWER_PATH, introspection)
+            proxy.get_interface("org.freedesktop.DBus.Properties").on_properties_changed(self._on_upower_changed)
+            return True
+        except Exception as e:
+            log.debug(f"Could not watch UPower: {e}")
+            if self.bus:
+                self.bus.disconnect()
+                self.bus = None
+            return False
+
+    def _on_upower_changed(self, interface: str, changed: dict, invalidated: list):
+        if interface == UPOWER_NAME and "OnBattery" in changed:
+            asyncio.get_running_loop().run_in_executor(None, self.check_power_source)
 
     def check_power_source(self):
         """Check current power source and adjust settings if needed"""
-        is_plugged_in = self._is_ac_connected()
+        with self._lock:
+            is_plugged_in = self._is_ac_connected()
 
-        # Only take action if power state changed
-        if is_plugged_in != self.current_source:
-            self.current_source = is_plugged_in
-            self._handle_power_change(is_plugged_in)
-
-        # Schedule next check
-        self.timer = Timer(self.check_interval, self.check_power_source)
-        self.timer.daemon = True
-        self.timer.start()
+            # Only take action if power state changed
+            if is_plugged_in != self.current_source:
+                self.current_source = is_plugged_in
+                self._handle_power_change(is_plugged_in)
 
     @staticmethod
     def _mains_supplies():
