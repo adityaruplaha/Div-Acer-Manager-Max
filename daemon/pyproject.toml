@@ -1,0 +1,29 @@
+[project]
+name = "damx-daemon"
+description = "Root service that controls Acer Nitro and Predator laptop features for the DAMX GUI"
+license = "GPL-3.0-only"
+requires-python = ">=3.10"
+dependencies = ["dbus-fast>=2.0"]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/PXDiv/Div-Acer-Manager-Max"
+
+[project.scripts]
+damx-daemon = "damx_daemon.daemon:main"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# The version lives in the package, where the daemon reports it and the
+# release workflow reads it
+[tool.hatch.version]
+path = "src/damx_daemon/__init__.py"
+pattern = 'VERSION = "(?P<version>[^"]+)"'
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
