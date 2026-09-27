@@ -22,7 +22,8 @@
 ### ✅ Fully Implemented
 
 * 🔋 **Performance / Thermal Profiles**
-  Eco, Silent, Balanced, Performance, Turbo — automatically adjusted based on AC/battery status
+  Eco, Silent, Balanced, Performance, Turbo — automatically adjusted based on AC/battery status,
+  as soon as the charger is plugged in or out (through UPower where it is installed)
   (e.g., Turbo hidden when on battery or unsupported)
 
 * 🌡 **Fan Control**
@@ -47,7 +48,7 @@
   * Talks to the GUI over the D-Bus system bus, and asks polkit before changing anything
   * Lightweight: uses \~10MB RAM
   * Can run **independently** of GUI
-  * Recursive restart to fix software issues similar to those on Windows
+  * Waits for the driver at startup, and reloads Linuwu-Sense once if its settings never appear
 
 * 🖥️ **Modern GUI**
 
@@ -124,7 +125,7 @@ remapper's config instead (after keyd it typically surfaces as `f16` /
 
 You can check the logs at /var/log/DAMX_Daemon_Log.log
 
-If you get UNKNOWN as Laptop type, try restarting (it happens sometimes)
+If you get UNKNOWN as Laptop type, the driver did not provide its settings in time: the daemon waits a few seconds for them and reloads Linuwu-Sense once, and restarting the laptop may still help
 But if it still happens that might mean the Drivers Installation failed, Make sure you have the appropriate kernel headers to compile the drivers.
 
 Also, check out the [FAQ page](https://github.com/PXDiv/Div-Acer-Manager-Max/blob/main/FAQ.md) before opening any issues.
