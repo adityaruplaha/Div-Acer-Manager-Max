@@ -89,7 +89,7 @@ class DAMXDaemon:
             #     log.error("Failed to start keyboard monitoring")
             #     # Don't return False here - continue with reduced functionality
 
-            # Initialize power monitor (started in run())
+            # Initialize power monitor (run alongside the D-Bus service)
             self.power_monitor = PowerSourceDetector(self.manager)
 
             # Log detected features
@@ -120,7 +120,6 @@ class DAMXDaemon:
         # Set up and run the server
         try:
             self.running = True
-            self.power_monitor.start_monitoring()
             asyncio.run(self._serve())
         except Exception as e:
             log.error(f"Error running daemon: {e}")
@@ -136,7 +135,7 @@ class DAMXDaemon:
             loop.add_signal_handler(sig, self.signal_handler, sig)
 
         self.server = DBusService(CommandProcessor(self.manager))
-        await self.server.run(self.stop)
+        await asyncio.gather(self.server.run(self.stop), self.power_monitor.run(self.stop))
 
     def cleanup(self):
         """Clean up resources"""
@@ -146,9 +145,6 @@ class DAMXDaemon:
         # if hasattr(self, 'keyboard_monitor') and self.keyboard_monitor:
         #     self.keyboard_monitor.stop_monitoring()
         #     log.info("Keyboard monitoring stopped")
-    
-        if self.power_monitor:
-            self.power_monitor.stop_monitoring()
     
         # Remove PID file
         try:

@@ -13,3 +13,4 @@ select = ["F", "I"]
 # tries to parse as Python
 [lint.per-file-ignores]
 "daemon/**/*dbus*.py" = ["F821", "F722"]
+"daemon/tests/test_power_source.py" = ["F821", "F722"]
