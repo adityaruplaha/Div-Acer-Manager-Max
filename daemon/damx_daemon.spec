@@ -2,8 +2,8 @@
 
 
 a = Analysis(
-    ['damx_daemon.py'],
-    pathex=[],
+    ['src/damx_daemon/__main__.py'],
+    pathex=['src'],
     binaries=[],
     datas=[],
     hiddenimports=[],
