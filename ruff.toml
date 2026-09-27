@@ -1,0 +1,4 @@
+# Lint for real errors (the pyflakes rules) only, which the daemon passes
+# today. Style rules can be enabled once the code has been formatted.
+[lint]
+select = ["F"]
