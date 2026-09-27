@@ -57,78 +57,63 @@ public partial class InternalsManager : Window
 
     private async void RestartSuiteButton_OnClick(object? sender, RoutedEventArgs e)
     {
-        try
-        {
-            if (_mainWindow._client.IsConnected)
-                _mainWindow._client.SendCommandAsync("restart_drivers_and_daemon");
-            Console.WriteLine("Restart suite command sent");
-            await Task.Delay(1000);
-
-            ReinitializeDamxGUI();
-            await ShowMessagebox("Restarting Suite", "Restarting Suite and refreshing GUI, please wait");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error in RestartSuiteButton: {ex.Message}");
-            await ShowMessagebox("Error", $"Failed to restart suite: {ex.Message}");
-        }
+        await RunDaemonCommandAsync("restart_drivers_and_daemon", "Restarting Suite",
+            "Restarting Suite and refreshing GUI, please wait");
     }
 
     private async void ForcePredatorButton_OnClick(object? sender, RoutedEventArgs e)
     {
-        try
-        {
-            if (_mainWindow._client.IsConnected)
-                _mainWindow._client.SendCommandAsync("force_predator_model");
-            Console.WriteLine("Force Predator Model Command Sent");
-            await Task.Delay(1000);
-            ReinitializeDamxGUI();
-            await ShowMessagebox("Forcing Predator Model",
-                "Restarting Drivers with predator_v4 parameter with daemon and refreshing GUI, please wait");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error in ForcePredatorButton: {ex.Message}");
-            await ShowMessagebox("Error", $"Failed to force predator model: {ex.Message}");
-        }
+        await RunDaemonCommandAsync("force_predator_model", "Forcing Predator Model",
+            "Restarting Drivers with predator_v4 parameter with daemon and refreshing GUI, please wait");
     }
 
     private async void ForceNitroButton_OnClick(object? sender, RoutedEventArgs e)
     {
-        try
-        {
-            if (_mainWindow._client.IsConnected)
-                _mainWindow._client.SendCommandAsync("force_nitro_model");
-            Console.WriteLine("Force Nitro Model Command Sent");
-            await Task.Delay(1000);
-            ReinitializeDamxGUI();
-            await ShowMessagebox("Forcing Nitro Model",
-                "Restarting Drivers with nitro_v4 parameter with daemon and refreshing GUI, please wait");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error in ForceNitroButton: {ex.Message}");
-            await ShowMessagebox("Error", $"Failed to force nitro model: {ex.Message}");
-        }
+        await RunDaemonCommandAsync("force_nitro_model", "Forcing Nitro Model",
+            "Restarting Drivers with nitro_v4 parameter with daemon and refreshing GUI, please wait");
     }
 
     private async void RestartDaemon_OnClick(object? sender, RoutedEventArgs e)
     {
+        await RunDaemonCommandAsync("restart_daemon", "Restarting Daemon",
+            "Restarting Daemon refreshing GUI, please wait");
+    }
+
+    /// <summary>
+    ///     Run a command that reloads the driver or restarts the daemon, and report how it went
+    /// </summary>
+    /// <remarks>
+    ///     The daemon answers once polkit has asked for a password, where it
+    ///     needs one, and the command has run; it restarts itself after
+    ///     answering, so the GUI is refreshed once it is back.
+    /// </remarks>
+    private async Task RunDaemonCommandAsync(string command, string title, string message)
+    {
+        if (!_mainWindow._client.IsConnected)
+        {
+            await ShowMessagebox("Error", "Daemon is not connected");
+            return;
+        }
+
         try
         {
-            if (_mainWindow._client.IsConnected)
-                _mainWindow._client.SendCommandAsync("restart_daemon");
-            Console.WriteLine("restart_daemon Command Sent");
+            using var response = await _mainWindow._client.SendCommandAsync(command);
+            var root = response.RootElement;
+            if (!root.GetProperty("success").GetBoolean())
+            {
+                var error = root.TryGetProperty("error", out var e) ? e.GetString() : "unknown error";
+                await ShowMessagebox("Error", $"{title} failed: {error}");
+                return;
+            }
 
             await Task.Delay(1000);
             ReinitializeDamxGUI();
-            await ShowMessagebox("Restarting Daemon",
-                "Restarting Daemon refreshing GUI, please wait");
+            await ShowMessagebox(title, message);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error in RestartDaemon: {ex.Message}");
-            await ShowMessagebox("Error", $"Failed to restart daemon: {ex.Message}");
+            Console.WriteLine($"Error running {command}: {ex.Message}");
+            await ShowMessagebox("Error", $"{title} failed: {ex.Message}");
         }
     }
 
@@ -147,21 +132,8 @@ public partial class InternalsManager : Window
 
     private async void ForceEnableAll_OnClick(object? sender, RoutedEventArgs e)
     {
-        try
-        {
-            if (_mainWindow._client.IsConnected)
-                _mainWindow._client.SendCommandAsync("force_enable_all");
-            Console.WriteLine("Force Enable All Features Command Sent");
-            await Task.Delay(1000);
-            await ShowMessagebox("Forcing All Features",
-                "Initializing Drivers with enable_all parameter. Restarting daemon and refreshing GUI, please wait");
-            ReinitializeDamxGUI();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error in ForceEnableAll: {ex.Message}");
-            await ShowMessagebox("Error", $"Failed to force enable all: {ex.Message}");
-        }
+        await RunDaemonCommandAsync("force_enable_all", "Forcing All Features",
+            "Initializing Drivers with enable_all parameter. Restarting daemon and refreshing GUI, please wait");
     }
 
     private async void ForceParameterPermanently_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -210,39 +182,9 @@ public partial class InternalsManager : Window
 
     private async Task SendParameterCommand(string command, string actionName)
     {
-        if (!_mainWindow._client.IsConnected)
-        {
-            await ShowMessagebox("Error", "Daemon is not connected");
-            return;
-        }
-
-        try
-        {
-            // Send the command
-            _mainWindow._client.SendCommandAsync(command);
-            Console.WriteLine($"Command '{command}' sent");
-
-            await ShowMessagebox("Success", $"{actionName} command sent successfully");
-
-            // Wait a moment for the command to process
-            await Task.Delay(500);
-
-            // Restart daemon to apply changes
-            if (_mainWindow._client.IsConnected)
-            {
-                _mainWindow._client.SendCommandAsync("restart_drivers_and_daemon");
-                Console.WriteLine("Restart drivers and daemon command sent");
-                await Task.Delay(1000);
-            }
-
-            // Refresh the GUI
-            ReinitializeDamxGUI();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error sending parameter command: {ex.Message}");
-            await ShowMessagebox("Error", $"Failed to {actionName}: {ex.Message}");
-        }
+        // The daemon reloads the driver with the new parameter and restarts itself
+        await RunDaemonCommandAsync(command, actionName,
+            $"{actionName}: reloading the driver and restarting the daemon, then refreshing the GUI");
     }
 
     // Add this method to help with debugging
