@@ -1,7 +1,8 @@
 """Filesystem locations the daemon uses, in one place so that tests can point them elsewhere"""
 
-CONFIG_PATH = "/etc/DAMX_Daemon/config.ini"
-PID_FILE = "/var/run/DAMX-Daemon.pid"
+CONFIG_PATH = "/etc/damx/config.ini"
+# Where versions before 0.6 kept the config, moved to CONFIG_PATH on startup
+LEGACY_CONFIG_PATH = "/etc/DAMX_Daemon/config.ini"
 MODPROBE_CONFIG_PATH = "/etc/modprobe.d/linuwu-sense.conf"
 
 # The acer-wmi platform device. Every driver built on the kernel's acer-wmi
