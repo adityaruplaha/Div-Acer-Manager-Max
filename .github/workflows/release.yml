@@ -128,11 +128,14 @@ jobs:
         echo "package_dir=$PACKAGE_DIR" >> $GITHUB_ENV
         echo "package_version=$PACKAGE_VERSION" >> $GITHUB_ENV
     
-    - name: Copy Daemon Executable
+    - name: Copy Daemon Executable and Policies
       run: |
         cp Div-Acer-Manager-Max/daemon/dist/DAMX-Daemon "${{ env.package_dir }}/DAMX-Daemon/"
         chmod +x "${{ env.package_dir }}/DAMX-Daemon/DAMX-Daemon"
-        echo "✓ Daemon executable copied"
+        cp Div-Acer-Manager-Max/daemon/data/io.github.PXDiv.DAMX.conf \
+           Div-Acer-Manager-Max/daemon/data/io.github.PXDiv.DAMX.policy \
+           "${{ env.package_dir }}/DAMX-Daemon/"
+        echo "✓ Daemon executable and D-Bus and polkit policies copied"
     
     - name: Copy GUI Executable and Icons
       run: |
